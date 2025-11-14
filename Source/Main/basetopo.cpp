@@ -17,6 +17,7 @@ Abstract:
 
 #include "definitions.h"
 #include "basetopo.h"
+#include "endpoints.h"
 
 //=============================================================================
 #pragma code_seg("PAGE")
@@ -304,7 +305,47 @@ Return Value:
             break;
 
         case KSPROPERTY_AUDIO_DEV_SPECIFIC:
-            ntStatus = PropertyHandlerDevSpecific(PropertyRequest);
+            // Route to appropriate handler based on node
+            // Node IDs: KSNODE_TOPO_BASS=2, KSNODE_TOPO_TREBLE=3, KSNODE_TOPO_REVERB=4, KSNODE_TOPO_CHORUS=5, KSNODE_TOPO_AEC=6
+            if (PropertyRequest->Node == KSNODE_TOPO_BASS)
+            {
+                ntStatus = PropertyHandler_Bass(
+                                    m_AdapterCommon,
+                                    PropertyRequest,
+                                    m_DeviceMaxChannels);
+            }
+            else if (PropertyRequest->Node == KSNODE_TOPO_TREBLE)
+            {
+                ntStatus = PropertyHandler_Treble(
+                                    m_AdapterCommon,
+                                    PropertyRequest,
+                                    m_DeviceMaxChannels);
+            }
+            else if (PropertyRequest->Node == KSNODE_TOPO_REVERB)
+            {
+                ntStatus = PropertyHandler_Reverb(
+                                    m_AdapterCommon,
+                                    PropertyRequest,
+                                    m_DeviceMaxChannels);
+            }
+            else if (PropertyRequest->Node == KSNODE_TOPO_CHORUS)
+            {
+                ntStatus = PropertyHandler_Chorus(
+                                    m_AdapterCommon,
+                                    PropertyRequest,
+                                    m_DeviceMaxChannels);
+            }
+            else if (PropertyRequest->Node == KSNODE_TOPO_AEC)
+            {
+                ntStatus = PropertyHandler_AcousticEchoCancel(
+                                    m_AdapterCommon,
+                                    PropertyRequest,
+                                    m_DeviceMaxChannels);
+            }
+            else
+            {
+                ntStatus = PropertyHandlerDevSpecific(PropertyRequest);
+            }
             break;
 
         default:
