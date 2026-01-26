@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "WebSearch",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" \"Source/Filters/Filters.vcxproj\" /p:Configuration=Release /p:Platform=x64 /p:TargetPlatformVersion=10.0.26100.0 /v:detailed)",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" \"Source/Filters/Filters.vcxproj\" /p:Configuration=Release /p:Platform=x64 /p:TargetPlatformVersion=10.0.26100.0 /t:__ListAllTargets)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" \"Source\\\\Filters\\\\Filters.vcxproj\" /p:Configuration=Release /p:Platform=x64 /p:TargetPlatformVersion=10.0.26100.0 /v:detailed)",
+      "Bash(powershell -Command:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Microsoft Visual Studio\\\\2022\\\\BuildTools\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" VirtualAudioDriver.sln /p:Configuration=Debug /p:Platform=x64 /v:detailed)",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" VirtualAudioDriver.sln /p:Configuration=Debug /p:Platform=x64 /v:detailed)",
+      "Bash(cmd.exe /c \"build.bat debug x64\")",
+      "Bash(cmd.exe /c \"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\build.bat debug x64\")",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"Source\\\\Main\\\\Main.vcxproj\" /p:Configuration=Debug /p:Platform=x64 /v:detailed)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\Source\\\\Main\\\\Main.vcxproj\" /p:Configuration=Debug /p:Platform=x64 /t:Link /v:detailed)"
+    ]
+  }
+}

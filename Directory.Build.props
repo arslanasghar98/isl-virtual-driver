@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Force VisualStudioVersion to 17.0 to match WDK build tasks assembly -->
+    <!-- MSBuild 2022 defaults to 18.0 but WDK 10.0.26100.0 only ships Microsoft.DriverKit.Build.Tasks.17.0.dll -->
+    <VisualStudioVersion>17.0</VisualStudioVersion>
+
+    <!-- Set WDK paths for MSBuild to find the kernel mode driver platform toolset -->
+    <WDKContentRoot Condition="'$(WDKContentRoot)' == ''">C:\Program Files (x86)\Windows Kits\10\</WDKContentRoot>
+    <WindowsDriverKitDir Condition="'$(WindowsDriverKitDir)' == ''">$(WDKContentRoot)</WindowsDriverKitDir>
+    <WindowsSDKVersion Condition="'$(WindowsSDKVersion)' == ''">10.0.26100.0\</WindowsSDKVersion>
+
+    <!-- Set Windows SDK directory (same as WDK for Windows 10) -->
+    <WindowsSdkDir Condition="'$(WindowsSdkDir)' == ''">$(WDKContentRoot)</WindowsSdkDir>
+
+    <!-- Set WDK build folder (used internally by WDK build tasks) -->
+    <WDKBuildFolder Condition="'$(WDKBuildFolder)' == ''">10.0.26100.0</WDKBuildFolder>
+
+    <!-- Set target platform version - must match an installed SDK version -->
+    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)' == ''">10.0.26100.0</WindowsTargetPlatformVersion>
+
+    <!-- Define legacy DDK_INC_PATH variable used by the project files -->
+    <!-- Modern WDK doesn't set this automatically, but our projects still reference it -->
+    <!-- Include both kernel mode (km) and WDF/KMDF paths -->
+    <DDK_INC_PATH Condition="'$(DDK_INC_PATH)' == ''">$(WDKContentRoot)Include\$(WindowsTargetPlatformVersion)\km;$(WDKContentRoot)Include\wdf\kmdf\1.33</DDK_INC_PATH>
+
+    <!-- Define legacy DDK_LIB_PATH variable used by the project files -->
+    <DDK_LIB_PATH Condition="'$(DDK_LIB_PATH)' == '' AND '$(Platform)' == 'x64'">$(WDKContentRoot)Lib\$(WindowsTargetPlatformVersion)\km\x64</DDK_LIB_PATH>
+    <DDK_LIB_PATH Condition="'$(DDK_LIB_PATH)' == '' AND '$(Platform)' == 'ARM64'">$(WDKContentRoot)Lib\$(WindowsTargetPlatformVersion)\km\ARM64</DDK_LIB_PATH>
+
+    <!-- Workaround for WDK 10.0.26100.0 bug: Define platform version constants before WindowsDriver.OS.props imports them -->
+    <!-- These are normally defined in WindowsDriver.Default.props but are referenced too early in WindowsDriver.OS.props -->
+    <TargetPlatformVersion_NI Condition="'$(TargetPlatformVersion_NI)' == ''">10.0.22621.0</TargetPlatformVersion_NI>
+    <TargetPlatformVersion_CO Condition="'$(TargetPlatformVersion_CO)' == ''">10.0.22000.0</TargetPlatformVersion_CO>
+    <TargetPlatformVersion_FE Condition="'$(TargetPlatformVersion_FE)' == ''">10.0.19041.0</TargetPlatformVersion_FE>
+
+    <!-- Workaround for WDK 10.0.26100.0 bug: Define NT target version constants early -->
+    <!-- These are normally defined in WindowsDriver.OSTargets.props but are referenced too early in WindowsDriver.KernelMode.Default.props -->
+    <_NT_TARGET_VERSION_WIN11_GE Condition="'$(_NT_TARGET_VERSION_WIN11_GE)' == ''">0xA000010</_NT_TARGET_VERSION_WIN11_GE>
+    <_NT_TARGET_VERSION_WIN10_NI Condition="'$(_NT_TARGET_VERSION_WIN10_NI)' == ''">0xA00000C</_NT_TARGET_VERSION_WIN10_NI>
+    <_NT_TARGET_VERSION_WIN10_CO Condition="'$(_NT_TARGET_VERSION_WIN10_CO)' == ''">0xA00000B</_NT_TARGET_VERSION_WIN10_CO>
+    <_NT_TARGET_VERSION_WIN10_FE Condition="'$(_NT_TARGET_VERSION_WIN10_FE)' == ''">0xA00000A</_NT_TARGET_VERSION_WIN10_FE>
+    <_NT_TARGET_VERSION_WIN10_MN Condition="'$(_NT_TARGET_VERSION_WIN10_MN)' == ''">0xA000009</_NT_TARGET_VERSION_WIN10_MN>
+    <_NT_TARGET_VERSION_WIN10_VB Condition="'$(_NT_TARGET_VERSION_WIN10_VB)' == ''">0xA000008</_NT_TARGET_VERSION_WIN10_VB>
+    <_NT_TARGET_VERSION_WIN10_19H1 Condition="'$(_NT_TARGET_VERSION_WIN10_19H1)' == ''">0xA000007</_NT_TARGET_VERSION_WIN10_19H1>
+    <_NT_TARGET_VERSION_WIN10_RS5 Condition="'$(_NT_TARGET_VERSION_WIN10_RS5)' == ''">0xA000006</_NT_TARGET_VERSION_WIN10_RS5>
+    <_NT_TARGET_VERSION_WIN10_RS4 Condition="'$(_NT_TARGET_VERSION_WIN10_RS4)' == ''">0xA000005</_NT_TARGET_VERSION_WIN10_RS4>
+    <_NT_TARGET_VERSION_WIN10_RS3 Condition="'$(_NT_TARGET_VERSION_WIN10_RS3)' == ''">0xA000004</_NT_TARGET_VERSION_WIN10_RS3>
+    <_NT_TARGET_VERSION_WIN10_RS2 Condition="'$(_NT_TARGET_VERSION_WIN10_RS2)' == ''">0xA000003</_NT_TARGET_VERSION_WIN10_RS2>
+    <_NT_TARGET_VERSION_WIN10_RS1 Condition="'$(_NT_TARGET_VERSION_WIN10_RS1)' == ''">0xA000002</_NT_TARGET_VERSION_WIN10_RS1>
+    <_NT_TARGET_VERSION_WIN10_TH2 Condition="'$(_NT_TARGET_VERSION_WIN10_TH2)' == ''">0xA000001</_NT_TARGET_VERSION_WIN10_TH2>
+    <_NT_TARGET_VERSION_WIN10 Condition="'$(_NT_TARGET_VERSION_WIN10)' == ''">0x0A00</_NT_TARGET_VERSION_WIN10>
+    <_NT_TARGET_VERSION_WINV63 Condition="'$(_NT_TARGET_VERSION_WINV63)' == ''">0x0603</_NT_TARGET_VERSION_WINV63>
+    <_NT_TARGET_VERSION_WIN8 Condition="'$(_NT_TARGET_VERSION_WIN8)' == ''">0x0602</_NT_TARGET_VERSION_WIN8>
+    <_NT_TARGET_VERSION_WIN7 Condition="'$(_NT_TARGET_VERSION_WIN7)' == ''">0x0601</_NT_TARGET_VERSION_WIN7>
+  </PropertyGroup>
+</Project>

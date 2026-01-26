@@ -23,18 +23,26 @@
       <Project>{E4DF0EEE-D35B-47F2-A9B1-41EA97C465FF}</Project>
     </ProjectReference>
   </ItemGroup>
-  <PropertyGroup Label="PropertySheets">
-    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
-    <ConfigurationType>Utility</ConfigurationType>
-    <DriverType>Package</DriverType>
-    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
-    <Configuration>Debug</Configuration>
-  </PropertyGroup>
+  <ItemGroup>
+    <Inf Include="..\Source\Main\VirtualAudioDriver.inx">
+      <CopyOutput>true</CopyOutput>
+    </Inf>
+  </ItemGroup>
+  <ItemGroup>
+    <FilesToPackage Include="$(SolutionDir)x64\$(Configuration)\virtualaudiodriver.sys" Condition="'$(Platform)'=='x64'" />
+    <FilesToPackage Include="$(SolutionDir)ARM64\$(Configuration)\virtualaudiodriver.sys" Condition="'$(Platform)'=='ARM64'" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Globals">
     <ProjectGuid>{830B14D5-0E32-4F9E-AEFA-4C9F6FC13C2A}</ProjectGuid>
     <SampleGuid>{E9D167E6-E633-4284-8F02-FF86DF3B6D7F}</SampleGuid>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Utility</ConfigurationType>
+    <DriverType>Package</DriverType>
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -59,8 +67,13 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
   <PropertyGroup>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\package\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SkipPackageVerification>true</SkipPackageVerification>
+    <EnableInf2cat>false</EnableInf2cat>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <ImportToStore>False</ImportToStore>
     <InstallMode>None</InstallMode>

@@ -1,0 +1,16 @@
+;*** MakeCAB Directive file for Virtual Audio Driver
+.OPTION EXPLICIT
+.Set CabinetFileCountThreshold=0
+.Set FolderFileCountThreshold=0
+.Set FolderSizeThreshold=0
+.Set MaxCabinetSize=0
+.Set MaxDiskFileCount=0
+.Set MaxDiskSize=0
+.Set CompressionType=MSZIP
+.Set Cabinet=on
+.Set Compress=on
+.Set CabinetNameTemplate=VirtualAudioDriver.cab
+.Set DestinationDir=VirtualAudioDriver
+D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.sys
+D:\Datics\Virtual-Audio-Driver\x64\Release\VirtualAudioDriver.inf
+D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.cat

@@ -6,6 +6,11 @@ echo Virtual Audio Driver Build Script
 echo ========================================
 echo.
 
+:: ------------------------------------------------------------
+:: Set Windows SDK version to match WDK version
+:: ------------------------------------------------------------
+set TARGET_SDK=10.0.26100.0
+
 :: Check if MSBuild is available in PATH first
 where msbuild >nul 2>&1
 if %errorlevel% equ 0 (
@@ -19,46 +24,34 @@ echo MSBuild not found in PATH, searching common locations...
 set MSBUILD_PATHS[0]=C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe
 set MSBUILD_PATHS[1]=C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe
 set MSBUILD_PATHS[2]=C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe
-set MSBUILD_PATHS[3]=C:\Program Files\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe
-set MSBUILD_PATHS[4]=C:\Program Files\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe
-set MSBUILD_PATHS[5]=C:\Program Files\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe
-set MSBUILD_PATHS[6]=C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\MSBuild.exe
-set MSBUILD_PATHS[7]=C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe
+set MSBUILD_PATHS[3]=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe
+set MSBUILD_PATHS[4]=C:\Program Files\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe
+set MSBUILD_PATHS[5]=C:\Program Files\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe
+set MSBUILD_PATHS[6]=C:\Program Files\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe
+set MSBUILD_PATHS[7]=C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\MSBuild.exe
+set MSBUILD_PATHS[8]=C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe
 
 set MSBUILD_EXE=
-for /L %%i in (0,1,7) do (
+for /L %%i in (0,1,8) do (
     call set CURRENT_PATH=%%MSBUILD_PATHS[%%i]%%
     if exist "!CURRENT_PATH!" (
-        set MSBUILD_EXE=!CURRENT_PATH!
-        echo Found MSBuild at: !CURRENT_PATH!
+        set "MSBUILD_EXE=!CURRENT_PATH!"
+        echo Found MSBuild
         goto msbuild_found
     )
 )
 
-:: If we get here, MSBuild wasn't found
-echo ERROR: MSBuild not found in PATH or common installation locations
-echo.
-echo Searched locations:
-echo   - System PATH
-echo   - Visual Studio 2022 Community/Professional/Enterprise
-echo   - Visual Studio 2019 Community/Professional/Enterprise/BuildTools
-echo   - Legacy MSBuild locations
-echo.
-echo Please ensure Visual Studio or Build Tools are installed
-echo or add MSBuild to your PATH manually
-echo.
-echo Press any key to close...
+echo ERROR: MSBuild not found
 pause >nul
 exit /b 1
 
 :msbuild_found
-:: If MSBuild was found in a specific location, use that path for all builds
 if defined MSBUILD_EXE (
-    echo Using MSBuild from: %MSBUILD_EXE%
-    set MSBUILD_CMD=%MSBUILD_EXE%
+    echo Using MSBuild from specific location
+    set "MSBUILD_CMD=%MSBUILD_EXE%"
 ) else (
     echo Using MSBuild from PATH
-    set MSBUILD_CMD=msbuild
+    set "MSBUILD_CMD=msbuild"
 )
 
 :: Default values
@@ -75,29 +68,11 @@ if /i "%1"=="x64" set PLATFORM=x64
 if /i "%1"=="arm64" set PLATFORM=ARM64
 if /i "%1"=="all" set BUILD_ALL=1
 if /i "%1"=="help" goto show_help
-if /i "%1"=="-h" goto show_help
-if /i "%1"=="--help" goto show_help
 shift
 goto parse_args
 
 :show_help
-echo Usage: build.bat [options]
-echo.
-echo Options:
-echo   debug       Build Debug configuration (default: Release)
-echo   release     Build Release configuration
-echo   x64         Build for x64 platform (default)
-echo   arm64       Build for ARM64 platform
-echo   all         Build all configurations and platforms
-echo   help        Show this help message
-echo.
-echo Examples:
-echo   build.bat                    # Build Release x64
-echo   build.bat debug x64          # Build Debug x64
-echo   build.bat release arm64      # Build Release ARM64
-echo   build.bat all                # Build all configurations
-echo.
-echo Press any key to close...
+echo Usage: build.bat [debug|release] [x64|arm64|all]
 pause >nul
 exit /b 0
 
@@ -107,13 +82,16 @@ if %BUILD_ALL%==1 goto build_all
 echo Building Virtual Audio Driver...
 echo Configuration: %CONFIG%
 echo Platform: %PLATFORM%
+echo Windows SDK: %TARGET_SDK%
 echo.
 
 if /i "%PLATFORM%"=="ARM64" (
     echo Building ARM64 with validation disabled...
-    call "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
+    "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
         /p:Configuration=%CONFIG% ^
         /p:Platform=ARM64 ^
+        /p:TargetPlatformVersion=%TARGET_SDK% ^
+        /p:VisualStudioVersion=17.0 ^
         /p:RunCodeAnalysis=false ^
         /p:DriverTargetPlatform=Universal ^
         /p:UseInfVerifierEx=false ^
@@ -127,26 +105,27 @@ if /i "%PLATFORM%"=="ARM64" (
         /p:EnableInf2cat=false
 ) else (
     echo Building x64 with full validation...
-    call "%MSBUILD_CMD%" "VirtualAudioDriver.sln" /p:Configuration=%CONFIG% /p:Platform=%PLATFORM%
+    "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
+        /p:Configuration=%CONFIG% ^
+        /p:Platform=%PLATFORM% ^
+        /p:TargetPlatformVersion=%TARGET_SDK% ^
+        /p:VisualStudioVersion=17.0
 )
 
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: Build failed with exit code %errorlevel%
-    echo.
-    echo Press any key to close...
     pause >nul
     exit /b %errorlevel%
 )
 
 echo.
 echo Build completed successfully!
-echo Output directory: %PLATFORM%\%CONFIG%\package
 goto show_output
 
 :build_all
 echo Building all configurations...
-echo.
+echo Windows SDK: %TARGET_SDK%
 
 set CONFIGS=Debug Release
 set PLATFORMS=x64 ARM64
@@ -157,12 +136,13 @@ for %%c in (%CONFIGS%) do (
         echo ========================================
         echo Building %%c %%p
         echo ========================================
-        
+
         if /i "%%p"=="ARM64" (
-            echo Building ARM64 with validation disabled...
-            call "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
+            "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
                 /p:Configuration=%%c ^
                 /p:Platform=ARM64 ^
+                /p:TargetPlatformVersion=%TARGET_SDK% ^
+                /p:VisualStudioVersion=17.0 ^
                 /p:RunCodeAnalysis=false ^
                 /p:DriverTargetPlatform=Universal ^
                 /p:UseInfVerifierEx=false ^
@@ -175,31 +155,28 @@ for %%c in (%CONFIGS%) do (
                 /p:ApiValidator_ExcludedTargets=ARM64 ^
                 /p:EnableInf2cat=false
         ) else (
-            echo Building x64 with full validation...
-            call "%MSBUILD_CMD%" "VirtualAudioDriver.sln" /p:Configuration=%%c /p:Platform=%%p
+            "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
+                /p:Configuration=%%c ^
+                /p:Platform=%%p ^
+                /p:TargetPlatformVersion=%TARGET_SDK% ^
+                /p:VisualStudioVersion=17.0
         )
-        
+
         if !errorlevel! neq 0 (
-            echo.
-            echo ERROR: Build failed for %%c %%p with exit code !errorlevel!
-            echo.
-            echo Press any key to close...
+            echo ERROR: Build failed for %%c %%p
             pause >nul
             exit /b !errorlevel!
         )
-        
-        echo Build %%c %%p completed successfully!
     )
 )
 
-echo.
 echo ========================================
 echo All builds completed successfully!
 echo ========================================
 
 :show_output
 echo.
-echo Built files can be found in:
+echo Output directory:
 if %BUILD_ALL%==1 (
     echo   x64\Debug\package\
     echo   x64\Release\package\
@@ -208,13 +185,6 @@ if %BUILD_ALL%==1 (
 ) else (
     echo   %PLATFORM%\%CONFIG%\package\
 )
-echo.
-echo Key files:
-echo   - VirtualAudioDriver.sys  (driver binary)
-echo   - VirtualAudioDriver.inf  (installation file)
-echo   - virtualaudiodriver.cat  (catalog file)
 
-echo.
-echo Press any key to close...
 pause >nul
 exit /b 0

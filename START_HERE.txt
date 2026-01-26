@@ -1,0 +1,107 @@
+================================================================================
+                        VIRTUAL AUDIO DRIVER
+                    QUICK START INSTALLATION GUIDE
+================================================================================
+
+                    CHOOSE YOUR INSTALLATION METHOD:
+
+================================================================================
+METHOD 1: SELF-SIGNED (RECOMMENDED) ⭐
+================================================================================
+
+Best option - No Test Mode watermark, more secure!
+
+WHAT TO DO:
+  1. Right-click:  SELF-SIGN-INSTALL.bat
+  2. Click:        "Run as administrator"
+  3. Follow:       Instructions on screen
+  4. Reboot:       Computer when done
+
+READ MORE: SELF-SIGNED-README.txt
+
+Requirements:
+  ✓ Windows SDK/WDK (usually already installed)
+  ✓ Administrator access
+
+Benefits:
+  ✓ NO "Test Mode" watermark
+  ✓ More secure
+  ✓ Professional approach
+
+================================================================================
+METHOD 2: TEST MODE (ALTERNATIVE)
+================================================================================
+
+Simpler but shows "Test Mode" watermark
+
+WHAT TO DO:
+  1. Open Command Prompt as Administrator
+  2. Type:    bcdedit /set testsigning on
+  3. Reboot computer
+  4. Right-click:  INSTALL.bat
+  5. Click:        "Run as administrator"
+
+READ MORE: INSTALL_README.txt
+
+Benefits:
+  ✓ Simpler (fewer steps)
+  ✓ No additional tools needed
+
+Drawbacks:
+  ✗ Shows "Test Mode" watermark on desktop
+  ✗ Disables signature enforcement
+
+================================================================================
+WHICH METHOD SHOULD I CHOOSE?
+================================================================================
+
+Choose METHOD 1 (Self-Signed) if:
+  ✓ You want a clean desktop (no watermark)
+  ✓ You care about security
+  ✓ You have Windows SDK/WDK installed
+  ✓ You don't mind a few extra steps
+
+Choose METHOD 2 (Test Mode) if:
+  ✓ You want the absolute simplest install
+  ✓ You don't mind the "Test Mode" watermark
+  ✓ You don't have Windows SDK/WDK
+
+RECOMMENDATION: Use METHOD 1 (Self-Signed) ⭐
+
+================================================================================
+AFTER INSTALLATION
+================================================================================
+
+You'll have two new audio devices:
+  🔊 ISL Speaker  - Virtual audio output
+  🎤 ISL Mic      - Virtual audio input
+
+To use them:
+  1. Right-click speaker icon in taskbar
+  2. Open Sound settings
+  3. Select ISL Speaker as output device
+  4. Select ISL Mic as input device
+
+================================================================================
+NEED HELP?
+================================================================================
+
+Detailed guides:
+  - SELF-SIGNED-README.txt  (for Method 1)
+  - INSTALL_README.txt      (for Method 2)
+  - INSTALLATION_GUIDE.md   (comprehensive guide)
+
+================================================================================
+UNINSTALLING
+================================================================================
+
+To remove the driver:
+  1. Right-click:  UNINSTALL.bat
+  2. Click:        "Run as administrator"
+
+================================================================================
+
+                    🚀 Ready to start?
+            Choose a method above and follow the steps!
+
+================================================================================
