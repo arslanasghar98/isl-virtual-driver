@@ -1,6 +1,6 @@
 ;*** BEGIN **********************************************************
 ;**                                                                **
-;** Automatically generated on: Wed Jan 21 16:53:03 2026           **
+;** Automatically generated on: Fri Jan 30 17:21:44 2026           **
 ;**                                                                **
 ;** MakeCAB Version: 5.00                                 **
 ;**                                                                **
@@ -10,11 +10,12 @@
 [cabinet list]
 1,1,VirtualAudioDriver.cab
 [file list]
-1,1,VirtualAudioDriver\virtualaudiodriver.sys,129768
-1,1,VirtualAudioDriver\VirtualAudioDriver.inf,7313
-1,1,VirtualAudioDriver\virtualaudiodriver.cat,12956
+1,1,VirtualAudioDriver\VirtualAudioDriver.inf,7116
+1,1,VirtualAudioDriver\virtualaudiodriver.sys,113368
+1,1,VirtualAudioDriver\virtualaudiodriver.cat,12994
+1,1,VirtualAudioDriver\virtualaudiodriver.pdb,1282048
 ;*** END ************************************************************
 ;**                                                                **
-;** Automatically generated on: Wed Jan 21 16:53:03 2026           **
+;** Automatically generated on: Fri Jan 30 17:21:44 2026           **
 ;**                                                                **
 ;*** END ************************************************************

@@ -25,13 +25,25 @@ Abstract:
 
 typedef void (*fnPcDriverUnload) (PDRIVER_OBJECT);
 fnPcDriverUnload gPCDriverUnloadRoutine = NULL;
+PDRIVER_OBJECT g_DriverObject = NULL;  // Store DriverObject for use without WDF
 extern "C" DRIVER_UNLOAD DriverUnload;
+
+// Device type flags for determining which endpoints to create
+#define DEVICE_TYPE_UNKNOWN  0
+#define DEVICE_TYPE_SPEAKER  1
+#define DEVICE_TYPE_MIC      2
 
 //-----------------------------------------------------------------------------
 // Referenced forward.
 //-----------------------------------------------------------------------------
 
 DRIVER_ADD_DEVICE AddDevice;
+
+// Function to determine device type from hardware ID
+NTSTATUS GetDeviceTypeFromHardwareId(
+    _In_ PDEVICE_OBJECT PhysicalDeviceObject,
+    _Out_ ULONG* pDeviceType
+);
 
 NTSTATUS
 StartDevice
@@ -112,13 +124,7 @@ Environment:
         gPCDriverUnloadRoutine(DriverObject);
     }
 
-    //
-    // Unload WDF driver object. 
-    //
-    if (WdfGetDriver() != NULL)
-    {
-        WdfDriverMiniportUnload(WdfGetDriver());
-    }
+    // WDF unload removed - not using WDF for virtual audio driver
 Done:
     return;
 }
@@ -151,6 +157,11 @@ NTSTATUS - SUCCESS if able to configure the framework
 {
     // Initializing the unicode string, so that if it is not allocated it will not be deallocated too.
     RtlInitUnicodeString(&g_RegistryPath, NULL);
+
+    if (RegistryPath == NULL || RegistryPath->Buffer == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     g_RegistryPath.MaximumLength = RegistryPath->Length + sizeof(WCHAR);
 
@@ -208,7 +219,8 @@ Returns:
     PAGED_CODE();
     UNREFERENCED_PARAMETER(RegistryPath);
 
-    DriverObject = WdfDriverWdmGetDriverObject(WdfGetDriver());
+    // Use global DriverObject instead of WDF (WDF removed for virtual audio driver)
+    DriverObject = g_DriverObject;
     DriverKey = NULL;
     ntStatus = IoOpenDriverRegistryKey(DriverObject, 
                                  DriverRegKeyParameters,
@@ -281,9 +293,18 @@ Return Value:
 
 --*/
     NTSTATUS                    ntStatus;
-    WDF_DRIVER_CONFIG           config;
 
     DPF(D_TERSE, ("[DriverEntry]"));
+
+    //
+    // WDF REMOVED for virtual audio driver.
+    // Virtual/software audio drivers don't need WDF - PortCls handles everything.
+    // WdfDriverCreate was crashing because KMDF binding wasn't working properly
+    // for ROOT-enumerated (software) devices.
+    //
+    
+    // Store DriverObject globally for use in GetRegistrySettings and other places
+    g_DriverObject = DriverObject;
 
     // Copy registry Path name in a global variable to be used by modules inside driver.
     // !! NOTE !! Inside this function we are initializing the registrypath, so we MUST NOT add any failing calls
@@ -292,27 +313,6 @@ Return Value:
     IF_FAILED_ACTION_JUMP(
         ntStatus,
         DPF(D_ERROR, ("Registry path copy error 0x%x", ntStatus)),
-        Done);
-    
-    WDF_DRIVER_CONFIG_INIT(&config, WDF_NO_EVENT_CALLBACK);
-    //
-    // Set WdfDriverInitNoDispatchOverride flag to tell the framework
-    // not to provide dispatch routines for the driver. In other words,
-    // the framework must not intercept IRPs that the I/O manager has
-    // directed to the driver. In this case, they will be handled by Audio
-    // port driver.
-    //
-    config.DriverInitFlags |= WdfDriverInitNoDispatchOverride;
-    config.DriverPoolTag    = MINADAPTER_POOLTAG;
-
-    ntStatus = WdfDriverCreate(DriverObject,
-                               RegistryPathName,
-                               WDF_NO_OBJECT_ATTRIBUTES,
-                               &config,
-                               WDF_NO_HANDLE);
-    IF_FAILED_ACTION_JUMP(
-        ntStatus,
-        DPF(D_ERROR, ("WdfDriverCreate failed, 0x%x", ntStatus)),
         Done);
 
     //
@@ -355,11 +355,7 @@ Done:
 
     if (!NT_SUCCESS(ntStatus))
     {
-        if (WdfGetDriver() != NULL)
-        {
-            WdfDriverMiniportUnload(WdfGetDriver());
-        }
-
+        // WDF cleanup removed - not using WDF for virtual audio driver
         ReleaseRegistryStringBuffer();
     }
     
@@ -428,6 +424,110 @@ Return Value:
     return ntStatus;
 } // AddDevice
 
+//=============================================================================
+#pragma code_seg("PAGE")
+NTSTATUS GetDeviceTypeFromHardwareId(
+    _In_ PDEVICE_OBJECT PhysicalDeviceObject,
+    _Out_ ULONG* pDeviceType
+)
+/*++
+Routine Description:
+    Queries the hardware ID of the device to determine if this is a
+    speaker or microphone instance.
+    
+Arguments:
+    PhysicalDeviceObject - The PDO for the device
+    pDeviceType - Returns DEVICE_TYPE_SPEAKER or DEVICE_TYPE_MIC
+    
+Return Value:
+    NT status code.
+--*/
+{
+    NTSTATUS ntStatus = STATUS_SUCCESS;
+    ULONG resultLength = 0;
+    PWCHAR hardwareIds = NULL;
+    
+    PAGED_CODE();
+    
+    *pDeviceType = DEVICE_TYPE_UNKNOWN;
+    
+    // First query to get the required buffer size
+    ntStatus = IoGetDeviceProperty(
+        PhysicalDeviceObject,
+        DevicePropertyHardwareID,
+        0,
+        NULL,
+        &resultLength);
+        
+    if (ntStatus != STATUS_BUFFER_TOO_SMALL || resultLength == 0)
+    {
+        DPF(D_ERROR, ("Failed to get hardware ID length, status 0x%x", ntStatus));
+        return STATUS_UNSUCCESSFUL;
+    }
+    
+    // Allocate buffer for hardware IDs
+    hardwareIds = (PWCHAR)ExAllocatePool2(POOL_FLAG_PAGED, resultLength, MINADAPTER_POOLTAG);
+    if (hardwareIds == NULL)
+    {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    
+    // Get the actual hardware IDs
+    ntStatus = IoGetDeviceProperty(
+        PhysicalDeviceObject,
+        DevicePropertyHardwareID,
+        resultLength,
+        hardwareIds,
+        &resultLength);
+        
+    if (!NT_SUCCESS(ntStatus))
+    {
+        DPF(D_ERROR, ("Failed to get hardware ID, status 0x%x", ntStatus));
+        ExFreePool(hardwareIds);
+        return ntStatus;
+    }
+    
+    // Check the hardware ID to determine device type
+    // Hardware IDs are multi-sz strings (null-terminated strings, followed by final null)
+    PWCHAR currentId = hardwareIds;
+    while (*currentId != L'\0')
+    {
+        DPF(D_TERSE, ("Hardware ID: %S", currentId));
+        
+        // Check for speaker hardware ID
+        if (wcsstr(currentId, L"ISLSpeaker") != NULL ||
+            wcsstr(currentId, L"ISLSPEAKER") != NULL)
+        {
+            *pDeviceType = DEVICE_TYPE_SPEAKER;
+            DPF(D_TERSE, ("Device type: SPEAKER"));
+            break;
+        }
+        
+        // Check for microphone hardware ID
+        if (wcsstr(currentId, L"ISLMic") != NULL ||
+            wcsstr(currentId, L"ISLMIC") != NULL)
+        {
+            *pDeviceType = DEVICE_TYPE_MIC;
+            DPF(D_TERSE, ("Device type: MIC"));
+            break;
+        }
+        
+        // Move to next string in multi-sz
+        currentId += wcslen(currentId) + 1;
+    }
+    
+    // If no specific type found, default based on legacy hardware ID
+    if (*pDeviceType == DEVICE_TYPE_UNKNOWN)
+    {
+        // Default to speaker for backward compatibility with old hardware ID
+        *pDeviceType = DEVICE_TYPE_SPEAKER;
+        DPF(D_TERSE, ("Device type defaulting to SPEAKER"));
+    }
+    
+    ExFreePool(hardwareIds);
+    return STATUS_SUCCESS;
+}
+
 #pragma code_seg()
 NTSTATUS
 _IRQL_requires_max_(DISPATCH_LEVEL)
@@ -465,7 +565,6 @@ InstallEndpointRenderFilters(
     NTSTATUS                    ntStatus                = STATUS_SUCCESS;
     PUNKNOWN                    unknownTopology         = NULL;
     PUNKNOWN                    unknownWave             = NULL;
-    PPORTCLSETWHELPER           pPortClsEtwHelper       = NULL;
 #ifdef _USE_IPortClsRuntimePower
     PPORTCLSRUNTIMEPOWER        pPortClsRuntimePower    = NULL;
 #endif // _USE_IPortClsRuntimePower
@@ -486,104 +585,21 @@ InstallEndpointRenderFilters(
 
     if (unknownWave) // IID_IPortClsEtwHelper and IID_IPortClsRuntimePower interfaces are only exposed on the WaveRT port.
     {
-        ntStatus = unknownWave->QueryInterface (IID_IPortClsEtwHelper, (PVOID *)&pPortClsEtwHelper);
-        if (NT_SUCCESS(ntStatus))
-        {
-            _pAdapterCommon->SetEtwHelper(pPortClsEtwHelper);
-            ASSERT(pPortClsEtwHelper != NULL);
-            pPortClsEtwHelper->Release();
-        }
-
+        //
+        // ALL TEST CODE DISABLED for virtual audio driver (ROOT-enumerated device).
+        // ETW, RuntimePower, and StreamResourceManager test code was causing [NULL+0x3A0] crashes
+        // because these interfaces expect a real hardware PDO, not a software-enumerated device.
+        //
+        // Real hardware drivers may use these interfaces for:
+        // - ETW tracing
+        // - Runtime power management
+        // - Interrupt and thread resource management
+        //
 #ifdef _USE_IPortClsRuntimePower
-        // Let's get the runtime power interface on PortCls.  
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsRuntimePower, (PVOID *)&pPortClsRuntimePower);
-        if (NT_SUCCESS(ntStatus))
-        {
-            // This interface would typically be stashed away for later use.  Instead,
-            // let's just send an empty control with GUID_NULL.
-            NTSTATUS ntStatusTest =
-                pPortClsRuntimePower->SendPowerControl
-                (
-                    _pDeviceObject,
-                    &GUID_NULL,
-                    NULL,
-                    0,
-                    NULL,
-                    0,
-                    NULL
-                );
-
-            if (NT_SUCCESS(ntStatusTest) || STATUS_NOT_IMPLEMENTED == ntStatusTest || STATUS_NOT_SUPPORTED == ntStatusTest)
-            {
-                ntStatus = pPortClsRuntimePower->RegisterPowerControlCallback(_pDeviceObject, &PowerControlCallback, NULL);
-                if (NT_SUCCESS(ntStatus))
-                {
-                    ntStatus = pPortClsRuntimePower->UnregisterPowerControlCallback(_pDeviceObject);
-                }
-            }
-            else
-            {
-                ntStatus = ntStatusTest;
-            }
-
-            pPortClsRuntimePower->Release();
-        }
-#endif // _USE_IPortClsRuntimePower
-
-        //
-        // Test: add and remove current thread as streaming audio resource.  
-        // In a real driver you should only add interrupts and driver-owned threads 
-        // (i.e., do NOT add the current thread as streaming resource).
-        //
-        // testing IPortClsStreamResourceManager:
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager, (PVOID *)&pPortClsResMgr);
-        if (NT_SUCCESS(ntStatus))
-        {
-            PCSTREAMRESOURCE_DESCRIPTOR res;
-            PCSTREAMRESOURCE hRes = NULL;
-            PDEVICE_OBJECT pdo = NULL;
-
-            PcGetPhysicalDeviceObject(_pDeviceObject, &pdo);
-            PCSTREAMRESOURCE_DESCRIPTOR_INIT(&res);
-            res.Pdo = pdo;
-            res.Type = ePcStreamResourceThread;
-            res.Resource.Thread = PsGetCurrentThread();
-            
-            NTSTATUS ntStatusTest = pPortClsResMgr->AddStreamResource(NULL, &res, &hRes);
-            if (NT_SUCCESS(ntStatusTest))
-            {
-                pPortClsResMgr->RemoveStreamResource(hRes);
-                hRes = NULL;
-            }
-
-            pPortClsResMgr->Release();
-            pPortClsResMgr = NULL;
-        }
-        
-        // testing IPortClsStreamResourceManager2:
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager2, (PVOID *)&pPortClsResMgr2);
-        if (NT_SUCCESS(ntStatus))
-        {
-            PCSTREAMRESOURCE_DESCRIPTOR res;
-            PCSTREAMRESOURCE hRes = NULL;
-            PDEVICE_OBJECT pdo = NULL;
-
-            PcGetPhysicalDeviceObject(_pDeviceObject, &pdo);
-            PCSTREAMRESOURCE_DESCRIPTOR_INIT(&res);
-            res.Pdo = pdo;
-            res.Type = ePcStreamResourceThread;
-            res.Resource.Thread = PsGetCurrentThread();
-            
-            NTSTATUS ntStatusTest = pPortClsResMgr2->AddStreamResource2(pdo, NULL, &res, &hRes);
-            if (NT_SUCCESS(ntStatusTest))
-            {
-                pPortClsResMgr2->RemoveStreamResource(hRes);
-                hRes = NULL;
-            }
-
-            pPortClsResMgr2->Release();
-            pPortClsResMgr2 = NULL;
-        }
+        UNREFERENCED_PARAMETER(pPortClsRuntimePower);
+#endif
+        UNREFERENCED_PARAMETER(pPortClsResMgr);
+        UNREFERENCED_PARAMETER(pPortClsResMgr2);
     }
 
     SAFE_RELEASE(unknownTopology);
@@ -757,9 +773,8 @@ Exit:
     // Stash the adapter common object in the device extension so
     // we can access it for cleanup on stop/removal.
     //
-    if (pAdapterCommon)
+    if (pAdapterCommon != NULL && pExtension != NULL)
     {
-        ASSERT(pExtension != NULL);
         pExtension->m_pCommon = pAdapterCommon;
     }
 
@@ -823,7 +838,7 @@ Return Value:
     case IRP_MN_STOP_DEVICE:
         ext = static_cast<PortClassDeviceContext*>(_DeviceObject->DeviceExtension);
 
-        if (ext->m_pCommon != NULL)
+        if (ext != NULL && ext->m_pCommon != NULL)
         {
             ext->m_pCommon->Cleanup();
             

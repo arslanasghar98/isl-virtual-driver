@@ -507,6 +507,7 @@ Return Value:
     SAFE_RELEASE(m_pPortClsEtwHelper);
     SAFE_RELEASE(m_pServiceGroupWave);
  
+    // WDF cleanup - m_WdfDevice is always NULL since WDF was removed for virtual audio driver
     if (m_WdfDevice)
     {
         WdfObjectDelete(m_WdfDevice);
@@ -647,21 +648,11 @@ Return Value:
         Done);
 
     //
-    // Create a WDF miniport to represent the adapter. Note that WDF miniports 
-    // are NOT audio miniports. An audio adapter is associated with a single WDF
-    // miniport. This driver uses WDF to simplify the handling of the Bluetooth
-    // SCO HFP Bypass interface.
+    // WDF REMOVED for virtual audio driver.
+    // WdfDeviceMiniportCreate was causing issues because KMDF binding wasn't working
+    // properly for ROOT-enumerated (software) devices.
+    // m_WdfDevice remains NULL - GetWdfDevice() is not called anywhere in this driver.
     //
-    ntStatus = WdfDeviceMiniportCreate( WdfGetDriver(),
-                                        WDF_NO_OBJECT_ATTRIBUTES,
-                                        DeviceObject,           // FDO
-                                        NULL,                   // Next device.
-                                        NULL,                   // PDO
-                                       &m_WdfDevice);
-    IF_FAILED_ACTION_JUMP(
-        ntStatus,
-        DPF(D_ERROR, ("WdfDeviceMiniportCreate failed, 0x%x", ntStatus)),
-        Done);
 
     // Initialize HW.
     // 
@@ -787,13 +778,13 @@ CAdapterCommon::WriteEtwEvent
     _In_ ULONGLONG  ullData4
 )
 {
-    NTSTATUS ntStatus = STATUS_SUCCESS;
-
-    if (m_pPortClsEtwHelper)
-    {
-        ntStatus = m_pPortClsEtwHelper->MiniportWriteEtwEvent( miniportEventType, ullData1, ullData2, ullData3, ullData4) ;
-    }
-    return ntStatus;
+    UNREFERENCED_PARAMETER(miniportEventType);
+    UNREFERENCED_PARAMETER(ullData1);
+    UNREFERENCED_PARAMETER(ullData2);
+    UNREFERENCED_PARAMETER(ullData3);
+    UNREFERENCED_PARAMETER(ullData4);
+    /* ETW disabled to avoid [NULL+0x3A0] crash when adapter/helper unavailable. */
+    return STATUS_SUCCESS;
 } // WriteEtwEvent
 
 //=============================================================================
@@ -2026,10 +2017,15 @@ Return Value:
 {
     PAGED_CODE();
     DPF_ENTER(("[CAdapterCommon::ConnectTopologies]"));
-    
+
     ASSERT(m_pDeviceObject != NULL);
-    
+
     NTSTATUS        ntStatus            = STATUS_SUCCESS;
+
+    if (PhysicalConnectionCount > 0 && PhysicalConnections == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     //
     // register wave <=> topology connections
@@ -2113,12 +2109,17 @@ Return Value:
 {
     PAGED_CODE();
     DPF_ENTER(("[CAdapterCommon::DisconnectTopologies]"));
-    
+
     ASSERT(m_pDeviceObject != NULL);
-    
+
     NTSTATUS                        ntStatus                        = STATUS_SUCCESS;
     NTSTATUS                        ntStatus2                       = STATUS_SUCCESS;
     PUNREGISTERPHYSICALCONNECTION   unregisterPhysicalConnection    = NULL;
+
+    if (PhysicalConnectionCount > 0 && PhysicalConnections == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     //
     // Get the IUnregisterPhysicalConnection interface
@@ -2646,52 +2647,19 @@ CAdapterCommon::SetIdlePowerManagement
     PAGED_CODE();
     DPF_ENTER(("[CAdapterCommon::SetIdlePowerManagement]"));
 
-    NTSTATUS      ntStatus   = STATUS_SUCCESS; 
-    IUnknown      *pUnknown = NULL;
-    PPORTCLSPOWER pPortClsPower = NULL;
-    // refcounting disable requests. Each miniport is responsible for calling this in pairs,
-    // disable on the first request to disable, enable on the last request to enable.
+    //
+    // DISABLED for virtual audio driver (ROOT-enumerated device).
+    // IPortClsPower::SetIdlePowerManagement causes [NULL+0x3A0] crashes
+    // because this interface expects a real hardware PDO with power management
+    // capabilities, not a software-enumerated device.
+    //
+    // Virtual/software audio drivers don't need idle power management anyway
+    // since there's no physical hardware to power down.
+    //
+    UNREFERENCED_PARAMETER(MiniportPair);
+    UNREFERENCED_PARAMETER(bEnabled);
 
-    // make sure that we always call SetIdlePowerManagment using the IPortClsPower
-    // from the requesting port, so we don't cache a reference to a port
-    // indefinitely, preventing it from ever unloading.
-    ntStatus = GetFilters(MiniportPair, NULL, NULL, &pUnknown, NULL);
-    if (NT_SUCCESS(ntStatus))
-    {
-        ntStatus = 
-            pUnknown->QueryInterface
-            (
-                IID_IPortClsPower,
-                (PVOID*) &pPortClsPower
-            );
-    }
-
-    if (NT_SUCCESS(ntStatus))
-    {
-        if (bEnabled)
-        {
-            m_dwIdleRequests--;
-
-            if (0 == m_dwIdleRequests)
-            {
-                pPortClsPower->SetIdlePowerManagement(m_pDeviceObject, TRUE);
-            }
-        }
-        else
-        {
-            if (0 == m_dwIdleRequests)
-            {
-                pPortClsPower->SetIdlePowerManagement(m_pDeviceObject, FALSE);
-            }
-
-            m_dwIdleRequests++;
-        }
-    }
-
-    SAFE_RELEASE(pUnknown);
-    SAFE_RELEASE(pPortClsPower);
-
-    return ntStatus;
+    return STATUS_SUCCESS;
 }
 
 #pragma code_seg("PAGE")

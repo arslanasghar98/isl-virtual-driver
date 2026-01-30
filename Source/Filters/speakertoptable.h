@@ -16,6 +16,11 @@ Abstract:
 
 #include "endpoints.h"
 
+//
+// {7ae81ff4-203e-4fe1-88aa-f2d57775cd4b} - Custom name GUID for speaker endpoint
+DEFINE_GUID(SPEAKER_CUSTOM_NAME,
+    0x7ae81ff4, 0x203e, 0x4fe1, 0x88, 0xaa, 0xf2, 0xd5, 0x77, 0x75, 0xcd, 0x4b);
+
 //=============================================================================
 static
 KSDATARANGE SpeakerTopoPinDataRangesBridge[] =
@@ -77,8 +82,8 @@ PCPIN_DESCRIPTOR SpeakerTopoMiniportPins[] =
       SpeakerTopoPinDataRangePointersBridge,            // DataRanges
       KSPIN_DATAFLOW_OUT,                               // DataFlow
       KSPIN_COMMUNICATION_NONE,                         // Communication
-      &KSNODETYPE_SPEAKER,                              // Category
-      NULL,                                             // Name
+      &KSNODETYPE_LINE_CONNECTOR,                       // Category - Line type (not auto-set as communications device)
+      &SPEAKER_CUSTOM_NAME,                             // Name - Custom "ISL Speaker" name
       0                                                 // Reserved
     }
   }
@@ -90,10 +95,10 @@ KSJACK_DESCRIPTION SpeakerJackDescBridge =
 {
     KSAUDIO_SPEAKER_STEREO,
     JACKDESC_RGB(0xB3,0xC9,0x8C),              // Color spec for green
-    eConnTypeUnknown,
-    eGeoLocFront,
-    eGenLocPrimaryBox,
-    ePortConnIntegratedDevice,
+    eConnTypeOtherAnalog,                      // Generic analog connection (not communications device)
+    eGeoLocNotApplicable,                      // Virtual device - no physical location
+    eGenLocOther,                              // Not a primary device
+    ePortConnUnknown,                          // Unknown port (virtual cable style)
     TRUE
 };
 

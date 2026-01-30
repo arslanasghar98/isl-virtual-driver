@@ -16,7 +16,16 @@
       "Bash(cmd.exe /c \"build.bat debug x64\")",
       "Bash(cmd.exe /c \"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\build.bat debug x64\")",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"Source\\\\Main\\\\Main.vcxproj\" /p:Configuration=Debug /p:Platform=x64 /v:detailed)",
-      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\Source\\\\Main\\\\Main.vcxproj\" /p:Configuration=Debug /p:Platform=x64 /t:Link /v:detailed)"
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\Source\\\\Main\\\\Main.vcxproj\" /p:Configuration=Debug /p:Platform=x64 /t:Link /v:detailed)",
+      "Bash(cmd /c \"dir D:\\\\Datics\\\\Virtual-Audio-Driver\\\\x64\\\\Release\")",
+      "Bash(cmd /c \"pnputil /enum-drivers\")",
+      "Bash(powershell.exe:*)",
+      "Bash(cmd.exe /c \"smctl sign --help\")",
+      "Bash(cmd.exe /c \"smctl sign --keypair-alias key_1435973180 --tool signtool --input \"\"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\x64\\\\Release\\\\virtualaudiodriver.cat\"\" --verbose\")",
+      "Bash(cmd.exe /c \"set PATH=%PATH%;C:\\\\Program Files \\(x86\\)\\\\Windows Kits\\\\10\\\\bin\\\\10.0.26100.0\\\\x64 && smctl sign --keypair-alias key_1435973180 --tool signtool --input \"\"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\x64\\\\Release\\\\virtualaudiodriver.cat\"\" --verbose\")",
+      "Bash(cmd.exe /c \"smctl certificate ls\")",
+      "Bash(cmd.exe /c \"smctl windows certsync --keypair-alias key_1435973180\")",
+      "Bash(cmd.exe /c \"pnputil /delete-driver oem134.inf /uninstall /force\")"
     ]
   }
 }

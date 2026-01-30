@@ -8,6 +8,9 @@
 
 #pragma warning (disable : 4127)
 
+// Global DriverObject from adapter.cpp (WDF removed for virtual audio driver)
+extern PDRIVER_OBJECT g_DriverObject;
+
 //=============================================================================
 // CMiniportWaveRTStream
 //=============================================================================
@@ -119,7 +122,8 @@ NTSTATUS CMiniportWaveRTStream::ReadRegistrySettings()
         { NULL,   0,                                                        NULL,                               NULL,                                   0,                                                              NULL,                                       0 }
     };
 
-    DriverObject = WdfDriverWdmGetDriverObject(WdfGetDriver());
+    // Use global DriverObject instead of WDF (WDF removed for virtual audio driver)
+    DriverObject = g_DriverObject;
     DriverKey = NULL;
     ntStatus = IoOpenDriverRegistryKey(DriverObject, 
                                  DriverRegKeyParameters,
@@ -572,11 +576,14 @@ NTSTATUS CMiniportWaveRTStream::RegisterNotificationEvent
     _In_ PKEVENT NotificationEvent_
 )
 {
-    UNREFERENCED_PARAMETER(NotificationEvent_);
-
     PAGED_CODE();
 
-    NotificationListEntry *nleNew = (NotificationListEntry*)ExAllocatePool2( 
+    NTSTATUS ntStatus = STATUS_SUCCESS;
+    KIRQL oldIrql;
+    BOOL bFound = FALSE;
+
+    // Allocate before acquiring spinlock (allocation can be at PASSIVE_LEVEL)
+    NotificationListEntry *nleNew = (NotificationListEntry*)ExAllocatePool2(
         POOL_FLAG_NON_PAGED,
         sizeof(NotificationListEntry),
         MINWAVERTSTREAM_POOLTAG);
@@ -587,6 +594,9 @@ NTSTATUS CMiniportWaveRTStream::RegisterNotificationEvent
 
     nleNew->NotificationEvent = NotificationEvent_;
 
+    // Acquire spinlock to safely access the notification list
+    KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+
     // Fail if the notification event already exists in our list.
     if (!IsListEmpty(&m_NotificationList))
     {
@@ -596,17 +606,29 @@ NTSTATUS CMiniportWaveRTStream::RegisterNotificationEvent
             NotificationListEntry* nleCurrent = CONTAINING_RECORD( leCurrent, NotificationListEntry, ListEntry);
             if (nleCurrent->NotificationEvent == NotificationEvent_)
             {
-                ExFreePoolWithTag( nleNew, MINWAVERTSTREAM_POOLTAG );
-                return STATUS_UNSUCCESSFUL;
+                bFound = TRUE;
+                ntStatus = STATUS_UNSUCCESSFUL;
+                break;
             }
 
             leCurrent = leCurrent->Flink;
         }
     }
 
-    InsertTailList(&m_NotificationList, &(nleNew->ListEntry));
-    
-    return STATUS_SUCCESS;
+    if (!bFound)
+    {
+        InsertTailList(&m_NotificationList, &(nleNew->ListEntry));
+    }
+
+    KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+
+    // Free the allocation if we didn't use it (found duplicate)
+    if (bFound)
+    {
+        ExFreePoolWithTag( nleNew, MINWAVERTSTREAM_POOLTAG );
+    }
+
+    return ntStatus;
 }
 
 //=============================================================================
@@ -616,9 +638,14 @@ NTSTATUS CMiniportWaveRTStream::UnregisterNotificationEvent
     _In_ PKEVENT NotificationEvent_
 )
 {
-    UNREFERENCED_PARAMETER(NotificationEvent_);
-
     PAGED_CODE();
+
+    NTSTATUS ntStatus = STATUS_NOT_FOUND;
+    KIRQL oldIrql;
+    NotificationListEntry* nleToFree = NULL;
+
+    // Acquire spinlock to safely access the notification list
+    KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
 
     if (!IsListEmpty(&m_NotificationList))
     {
@@ -629,15 +656,24 @@ NTSTATUS CMiniportWaveRTStream::UnregisterNotificationEvent
             if (nleCurrent->NotificationEvent == NotificationEvent_)
             {
                 RemoveEntryList( leCurrent );
-                ExFreePoolWithTag( nleCurrent, MINWAVERTSTREAM_POOLTAG );
-                return STATUS_SUCCESS;
+                nleToFree = nleCurrent;
+                ntStatus = STATUS_SUCCESS;
+                break;
             }
 
             leCurrent = leCurrent->Flink;
         }
     }
 
-    return STATUS_NOT_FOUND;
+    KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+
+    // Free the entry after releasing the spinlock
+    if (nleToFree != NULL)
+    {
+        ExFreePoolWithTag( nleToFree, MINWAVERTSTREAM_POOLTAG );
+    }
+
+    return ntStatus;
 }
 
 
@@ -1123,23 +1159,26 @@ NTSTATUS CMiniportWaveRTStream::SetCurrentWritePositionInternal(_In_  ULONG _ulC
         return STATUS_INVALID_DEVICE_REQUEST;
     }
 
-    PADAPTERCOMMON pAdapterComm = m_pMiniport->GetAdapterCommObj();
+    PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
 
     //Event type: eMINIPORT_SET_WAVERT_BUFFER_WRITE_POSITION
     //Parameter 1: Current linear buffer position    
     //Parameter 2: Previous WaveRtBufferWritePosition that the driver received    
     //Parameter 3: Target WaveRtBufferWritePosition received from portcls
     //Parameter 4: 0
-    pAdapterComm->WriteEtwEvent(eMINIPORT_SET_WAVERT_BUFFER_WRITE_POSITION,
-        m_ullLinearPosition, // replace with the correct "Current linear buffer position"    
-        m_ulCurrentWritePosition,
-        _ulCurrentWritePosition, // this is new write position
-        0); // always zero
+    if (pAdapterComm)
+    {
+        pAdapterComm->WriteEtwEvent(eMINIPORT_SET_WAVERT_BUFFER_WRITE_POSITION,
+            m_ullLinearPosition, // replace with the correct "Current linear buffer position"    
+            m_ulCurrentWritePosition,
+            _ulCurrentWritePosition, // this is new write position
+            0); // always zero
+    }
 
 //
 // Check for eMINIPORT_GLITCH_REPORT - Same WaveRT buffer write during event driven mode.
 //
-    if (m_ulNotificationIntervalMs > 0)
+    if (m_ulNotificationIntervalMs > 0 && pAdapterComm)
     {
         if (m_ulCurrentWritePosition == _ulCurrentWritePosition)
         {
@@ -1181,14 +1220,27 @@ NTSTATUS CMiniportWaveRTStream::SetState
             {
                 // Acquire stream resources
             }
+
+            // IMPORTANT: Cancel timer and flush DPCs BEFORE updating state
+            // This prevents race condition where timer callback accesses state during transition
+            if (m_ulNotificationIntervalMs > 0)
+            {
+                ExCancelTimer(m_pNotificationTimer, NULL);
+                KeFlushQueuedDpcs();
+            }
+
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+
+            // Update state FIRST under spinlock to prevent timer callback from running
+            m_KsState = State_;
+
             // Reset DMA
             m_llPacketCounter = 0;
             m_ullPlayPosition = 0;
             m_ullWritePosition = 0;
             m_ullLinearPosition = 0;
             m_ullPresentationPosition = 0;
-            
+
             // Reset OS read/write positions
             m_ulLastOsReadPacket = ULONG_MAX;
             m_ulCurrentWritePosition = 0;
@@ -1203,15 +1255,18 @@ NTSTATUS CMiniportWaveRTStream::SetState
             {
                 m_SaveData.WaitAllWorkItems();
             }
-            break;
+            return ntStatus;  // State already updated, return early
 
         case KSSTATE_ACQUIRE:
             if (m_KsState == KSSTATE_STOP)
             {
                 // Acquire stream resources
             }
-            break;
-            
+            KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+            m_KsState = State_;
+            KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+            return ntStatus;  // State already updated, return early
+
         case KSSTATE_PAUSE:
 
             if (m_KsState > KSSTATE_PAUSE)
@@ -1220,58 +1275,84 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 // Run -> Pause
                 //
 
-                // Pause DMA
+                // Pause DMA - Cancel timer FIRST before any state changes
                 if (m_ulNotificationIntervalMs > 0)
                 {
                     ExCancelTimer(m_pNotificationTimer, NULL);
-                    KeFlushQueuedDpcs(); 
-
-                    // If pin is transitioning from RUN, save the time since last buffer completion event was sent 
-                    // so if the pin goes to RUN state again we can send the buffer completion event at correct time.
-                    if (m_ullLastDPCTimeStamp > 0)
-                    {
-                        LARGE_INTEGER qpc;
-                        LARGE_INTEGER qpcFrequency;
-                        LONGLONG  hnsCurrentTime;
-
-                        qpc = KeQueryPerformanceCounter(&qpcFrequency);
-
-                        // Convert ticks to 100ns units.
-                        hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, qpc);
-                        m_hnsDPCTimeCarryForward = hnsCurrentTime - m_ullLastDPCTimeStamp + m_hnsDPCTimeCarryForward;
-                    }
+                    KeFlushQueuedDpcs();
                 }
+
+                KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+
+                // Update state under spinlock
+                m_KsState = State_;
+
+                // If pin is transitioning from RUN, save the time since last buffer completion event was sent
+                // so if the pin goes to RUN state again we can send the buffer completion event at correct time.
+                if (m_ulNotificationIntervalMs > 0 && m_ullLastDPCTimeStamp > 0)
+                {
+                    LARGE_INTEGER qpc;
+                    LARGE_INTEGER qpcFrequency;
+                    LONGLONG  hnsCurrentTime;
+
+                    qpc = KeQueryPerformanceCounter(&qpcFrequency);
+
+                    // Convert ticks to 100ns units.
+                    hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, qpc);
+                    m_hnsDPCTimeCarryForward = hnsCurrentTime - m_ullLastDPCTimeStamp + m_hnsDPCTimeCarryForward;
+                }
+
+                KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
             }
+            else
+            {
+                // Other transitions to PAUSE (e.g., ACQUIRE -> PAUSE)
+                KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+                m_KsState = State_;
+                KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+            }
+
             // This call updates the linear buffer and presentation positions.
             GetPositions(NULL, NULL, NULL);
-            break;
+            return ntStatus;  // State already updated, return early
 
         case KSSTATE_RUN:
-            // Start DMA
-            LARGE_INTEGER ullPerfCounterTemp;
-            ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
-            m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
-
-            if (m_ulNotificationIntervalMs > 0)
             {
-                // Set timer for 1 ms. This will cause DPC to run every 1 ms but driver will send out 
-                // notification events only after notification interval. This timer is used by Simple Audio Sample to 
-                // emulate hardware and send out notification event. Real hardware should not use this
-                // timer to fire notification event as it will drain power if the timer is running at 1 msec.
-                ExSetTimer
-                (
-                    m_pNotificationTimer,
-                    (-1) * HNSTIME_PER_MILLISECOND,
-                    HNSTIME_PER_MILLISECOND, // 1 ms 
-                    NULL
-                 );
+                // Start DMA
+                LARGE_INTEGER ullPerfCounterTemp;
+                ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
 
+                KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+
+                m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
+
+                // Update state BEFORE starting timer to ensure timer callback sees correct state
+                m_KsState = State_;
+
+                KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+
+                if (m_ulNotificationIntervalMs > 0)
+                {
+                    // Set timer for 1 ms. This will cause DPC to run every 1 ms but driver will send out
+                    // notification events only after notification interval. This timer is used by Simple Audio Sample to
+                    // emulate hardware and send out notification event. Real hardware should not use this
+                    // timer to fire notification event as it will drain power if the timer is running at 1 msec.
+                    ExSetTimer
+                    (
+                        m_pNotificationTimer,
+                        (-1) * HNSTIME_PER_MILLISECOND,
+                        HNSTIME_PER_MILLISECOND, // 1 ms
+                        NULL
+                     );
+                }
             }
-
-            break;
+            return ntStatus;  // State already updated, return early
     }
 
+    // Default case (should not reach here normally)
+    KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
     m_KsState = State_;
+    KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
     return ntStatus;
 }
@@ -1490,7 +1571,14 @@ Return Value:
     //
     // Miniport should create a mixed DrmRights.
     //
-    ntStatus = m_pMiniport->UpdateDrmRights();
+    if (m_pMiniport)
+    {
+        ntStatus = m_pMiniport->UpdateDrmRights();
+    }
+    else
+    {
+        ntStatus = STATUS_INVALID_DEVICE_STATE;
+    }
 
     //
     // Restore the passed-in content Id.
@@ -1560,7 +1648,7 @@ TimerNotifyRT
     _IRQL_limited_to_(DISPATCH_LEVEL);
 
     CMiniportWaveRTStream* _this = (CMiniportWaveRTStream*)DeferredContext;
-    
+
     if (NULL == _this)
     {
         return;
@@ -1569,12 +1657,20 @@ TimerNotifyRT
     KIRQL oldIrql;
     KeAcquireSpinLock(&_this->m_PositionSpinLock, &oldIrql);
 
+    // IMPORTANT: Check state immediately after acquiring spinlock
+    // If not in RUN state, exit early to avoid race conditions during state transitions
+    if (_this->m_KsState != KSSTATE_RUN)
+    {
+        KeReleaseSpinLock(&_this->m_PositionSpinLock, oldIrql);
+        return;
+    }
+
     qpc = KeQueryPerformanceCounter(&qpcFrequency);
 
     // Convert ticks to 100ns units.
     LONGLONG  hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(_this->m_ullPerformanceCounterFrequency.QuadPart, qpc);
 
-    // Calculate the time elapsed since the last we ran DPC that matched Notification interval. Note that the division by 10000 
+    // Calculate the time elapsed since the last we ran DPC that matched Notification interval. Note that the division by 10000
     // to convert to milliseconds may cause us to lose some of the time, so we will carry the remainder forward.
 
     ULONG TimeElapsedInMS = (ULONG)(hnsCurrentTime - _this->m_ullLastDPCTimeStamp + _this->m_hnsDPCTimeCarryForward)/10000;
@@ -1600,40 +1696,46 @@ TimerNotifyRT
         _this->m_llPacketCounter++;
     }
 
+    // Re-check state after position update - state may have changed
     if (_this->m_KsState != KSSTATE_RUN)
     {
         goto End;
     }
-    
-    PADAPTERCOMMON  pAdapterComm = _this->m_pMiniport->GetAdapterCommObj();
+
+    PADAPTERCOMMON  pAdapterComm = _this->m_pMiniport ? _this->m_pMiniport->GetAdapterCommObj() : NULL;
 
     // Simple buffer underrun detection.
-    if (!_this->IsCurrentWaveRTWritePositionUpdated() && !_this->m_bEoSReceived)
+    if (pAdapterComm && !_this->IsCurrentWaveRTWritePositionUpdated() && !_this->m_bEoSReceived)
     {
         //Event type: eMINIPORT_GLITCH_REPORT
-        //Parameter 1: Current linear buffer position 
-        //Parameter 2: Previous WaveRtBufferWritePosition that the driver received 
+        //Parameter 1: Current linear buffer position
+        //Parameter 2: Previous WaveRtBufferWritePosition that the driver received
         //Parameter 3: Major glitch code: 1:WaveRT buffer is underrun
         //Parameter 4: Minor code for the glitch cause
-        pAdapterComm->WriteEtwEvent(eMINIPORT_GLITCH_REPORT, 
+        pAdapterComm->WriteEtwEvent(eMINIPORT_GLITCH_REPORT,
                                     _this->m_ullLinearPosition,
                                     _this->GetCurrentWaveRTWritePosition(),
                                     1,      // WaveRT buffer is underrun
-                                    0); 
+                                    0);
     }
 
     // Send buffer completion event if either of the following is true
     // 1. Driver consumed a complete buffer for this stream
     // 2. Driver consumed a partial buffer containing EoS for this stream
 
-    if (!IsListEmpty(&_this->m_NotificationList) && 
+    if (!IsListEmpty(&_this->m_NotificationList) &&
         (bufferCompleted || _this->m_bLastBufferRendered))
     {
         PLIST_ENTRY leCurrent = _this->m_NotificationList.Flink;
         while (leCurrent != &_this->m_NotificationList)
         {
             NotificationListEntry* nleCurrent = CONTAINING_RECORD( leCurrent, NotificationListEntry, ListEntry);
-            KeSetEvent(nleCurrent->NotificationEvent, 0, 0);
+
+            // Validate the notification event pointer before signaling
+            if (nleCurrent != NULL && nleCurrent->NotificationEvent != NULL)
+            {
+                KeSetEvent(nleCurrent->NotificationEvent, 0, 0);
+            }
 
             leCurrent = leCurrent->Flink;
         }

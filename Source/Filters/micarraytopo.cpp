@@ -598,12 +598,12 @@ Return Value:
                         pMI->Count = 1;
 
                         pDesc->ChannelMapping = 0;                // Don't specify channel mask for array mic
-                        pDesc->Color = 0x00000000;       // Black.  This is an integrated device
-                        pDesc->ConnectionType = eConnTypeUnknown; // Integrated.
-                        pDesc->GenLocation = eGenLocPrimaryBox;
-                        pDesc->GeoLocation = eGeoLocFront;
-                        pDesc->PortConnection = ePortConnIntegratedDevice;
-                        pDesc->IsConnected = TRUE;             // This is an integrated device, so it's always "connected"
+                        pDesc->Color = 0x00000000;                // Black
+                        pDesc->ConnectionType = eConnTypeOtherAnalog; // Generic analog (not communications device)
+                        pDesc->GenLocation = eGenLocOther;        // Not a primary device
+                        pDesc->GeoLocation = eGeoLocNotApplicable; // Virtual device - no physical location
+                        pDesc->PortConnection = ePortConnUnknown; // Unknown port (virtual cable style)
+                        pDesc->IsConnected = TRUE;                // Always connected
 
                         ntStatus = STATUS_SUCCESS;
                     }

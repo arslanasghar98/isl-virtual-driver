@@ -356,8 +356,10 @@ Return Value:
     UNREFERENCED_PARAMETER(Port_);
     PAGED_CODE();
 
-    ASSERT(UnknownAdapter_);
-    ASSERT(Port_);
+    if (Port_ == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     DPF_ENTER(("[CMiniportWaveRT::Init]"));
 
@@ -768,14 +770,23 @@ _Use_decl_annotations_
 ULONG CMiniportWaveRT::GetPinSupportedDeviceFormats(_In_ ULONG PinId, _Outptr_opt_result_buffer_(return) KSDATAFORMAT_WAVEFORMATEXTENSIBLE **ppFormats)
 {
     PPIN_DEVICE_FORMATS_AND_MODES pDeviceFormatsAndModes = NULL;
+    ULONG count = 0;
 
     AcquireFormatsAndModesLock();
 
     pDeviceFormatsAndModes = m_DeviceFormatsAndModes;
-    ASSERT(m_DeviceFormatsAndModesCount > PinId);
-    ASSERT(pDeviceFormatsAndModes[PinId].WaveFormats != NULL);
-    ASSERT(pDeviceFormatsAndModes[PinId].WaveFormatsCount > 0);
+    if (pDeviceFormatsAndModes == NULL || PinId >= m_DeviceFormatsAndModesCount ||
+        pDeviceFormatsAndModes[PinId].WaveFormats == NULL || pDeviceFormatsAndModes[PinId].WaveFormatsCount == 0)
+    {
+        ReleaseFormatsAndModesLock();
+        if (ppFormats != NULL)
+        {
+            *ppFormats = NULL;
+        }
+        return 0;
+    }
 
+    count = pDeviceFormatsAndModes[PinId].WaveFormatsCount;
     if (ppFormats != NULL)
     {
         *ppFormats = pDeviceFormatsAndModes[PinId].WaveFormats;
@@ -783,7 +794,7 @@ ULONG CMiniportWaveRT::GetPinSupportedDeviceFormats(_In_ ULONG PinId, _Outptr_op
 
     ReleaseFormatsAndModesLock();
 
-    return pDeviceFormatsAndModes[PinId].WaveFormatsCount;
+    return count;
 }
 
 //---------------------------------------------------------------------------
@@ -802,13 +813,20 @@ ULONG CMiniportWaveRT::GetPinSupportedDeviceFormats(_In_ ULONG PinId, _Outptr_op
 _Use_decl_annotations_
 ULONG CMiniportWaveRT::GetPinSupportedDeviceModes(_In_ ULONG PinId, _Outptr_opt_result_buffer_(return) _On_failure_(_Deref_post_null_) MODE_AND_DEFAULT_FORMAT **ppModes)
 {
-    PMODE_AND_DEFAULT_FORMAT modes;
-    ULONG numModes;
+    PMODE_AND_DEFAULT_FORMAT modes = NULL;
+    ULONG numModes = 0;
 
     AcquireFormatsAndModesLock();
 
-    ASSERT(m_DeviceFormatsAndModesCount > PinId);
-    ASSERT((m_DeviceFormatsAndModes[PinId].ModeAndDefaultFormatCount == 0) == (m_DeviceFormatsAndModes[PinId].ModeAndDefaultFormat == NULL));
+    if (m_DeviceFormatsAndModes == NULL || PinId >= m_DeviceFormatsAndModesCount)
+    {
+        ReleaseFormatsAndModesLock();
+        if (ppModes != NULL)
+        {
+            *ppModes = NULL;
+        }
+        return 0;
+    }
 
     modes = m_DeviceFormatsAndModes[PinId].ModeAndDefaultFormat;
     numModes = m_DeviceFormatsAndModes[PinId].ModeAndDefaultFormatCount;
@@ -836,34 +854,52 @@ ULONG CMiniportWaveRT::GetPinSupportedDeviceModes(_In_ ULONG PinId, _Outptr_opt_
 #pragma code_seg()
 BOOL CMiniportWaveRT::IsSystemCapturePin(ULONG nPinId)
 {
+    BOOL result = FALSE;
+
     AcquireFormatsAndModesLock();
 
-    PINTYPE pinType = m_DeviceFormatsAndModes[nPinId].PinType;
+    if (m_DeviceFormatsAndModes != NULL && nPinId < m_DeviceFormatsAndModesCount)
+    {
+        PINTYPE pinType = m_DeviceFormatsAndModes[nPinId].PinType;
+        result = (pinType == SystemCapturePin);
+    }
 
     ReleaseFormatsAndModesLock();
-    return (pinType == SystemCapturePin);
+    return result;
 }
 
 #pragma code_seg()
 BOOL CMiniportWaveRT::IsSystemRenderPin(ULONG nPinId)
 {
+    BOOL result = FALSE;
+
     AcquireFormatsAndModesLock();
 
-    PINTYPE pinType = m_DeviceFormatsAndModes[nPinId].PinType;
+    if (m_DeviceFormatsAndModes != NULL && nPinId < m_DeviceFormatsAndModesCount)
+    {
+        PINTYPE pinType = m_DeviceFormatsAndModes[nPinId].PinType;
+        result = (pinType == SystemRenderPin);
+    }
 
     ReleaseFormatsAndModesLock();
-    return (pinType == SystemRenderPin);
+    return result;
 }
 
 #pragma code_seg()
 BOOL CMiniportWaveRT::IsBridgePin(ULONG nPinId)
 {
+    BOOL result = FALSE;
+
     AcquireFormatsAndModesLock();
 
-    PINTYPE pinType = m_DeviceFormatsAndModes[nPinId].PinType;
+    if (m_DeviceFormatsAndModes != NULL && nPinId < m_DeviceFormatsAndModesCount)
+    {
+        PINTYPE pinType = m_DeviceFormatsAndModes[nPinId].PinType;
+        result = (pinType == BridgePin);
+    }
 
     ReleaseFormatsAndModesLock();
-    return (pinType == BridgePin);
+    return result;
 }
 
 //=============================================================================
@@ -1263,7 +1299,7 @@ _In_  PPCEVENT_REQUEST EventRequest
         // We should add the event now!
     case PCEVENT_VERB_ADD:
         // If we have the interface and EventEntry is defined ...
-        if (EventRequest->EventEntry)
+        if (EventRequest->EventEntry && m_pPortEvents != NULL)
         {
             switch (EventRequest->EventItem->Id)
             {
