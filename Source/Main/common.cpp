@@ -3064,7 +3064,8 @@ CAdapterCommon::WriteToLoopbackBuffer
 /*++
 Routine Description:
     Writes audio data to circular loopback buffer (VB-Cable style).
-    If buffer overflows, oldest data is overwritten.
+    If buffer overflows, oldest data is overwritten with sample alignment preserved.
+    Ensures sample-aligned writes to prevent audio distortion.
 Arguments:
     Buffer - Pointer to audio data
     ByteCount - Number of bytes to write
@@ -3078,26 +3079,47 @@ Arguments:
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
 
-    ULONG bytesToWrite = ByteCount;
+    // Fixed format: 16-bit stereo = 4 bytes per sample frame
+    // This MUST match the format in speakerwavtable.h and micarraywavtable.h
+    const ULONG bytesPerSample = LOOPBACK_BYTES_PER_SAMPLE;
+
+    // Ensure we write sample-aligned data
+    ULONG bytesToWrite = (ByteCount / bytesPerSample) * bytesPerSample;
+    if (bytesToWrite == 0)
+    {
+        KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
+        return;
+    }
+
     ULONG bufferSpace = m_ulLoopbackBufferSize - m_ulLoopbackDataAvailable;
 
     // If buffer would overflow, advance read position (overwrite oldest data)
+    // Ensure overflow adjustment is also sample-aligned
     if (bytesToWrite > bufferSpace)
     {
         ULONG overflow = bytesToWrite - bufferSpace;
+        // Round up to next sample boundary to maintain alignment
+        overflow = ((overflow + bytesPerSample - 1) / bytesPerSample) * bytesPerSample;
         m_ulLoopbackReadPos = (m_ulLoopbackReadPos + overflow) % m_ulLoopbackBufferSize;
-        m_ulLoopbackDataAvailable -= overflow;
+        if (overflow > m_ulLoopbackDataAvailable)
+        {
+            m_ulLoopbackDataAvailable = 0;
+        }
+        else
+        {
+            m_ulLoopbackDataAvailable -= overflow;
+        }
     }
 
     // Write to circular buffer
-    while (bytesToWrite > 0)
+    ULONG bytesWritten = 0;
+    while (bytesWritten < bytesToWrite)
     {
-        ULONG chunk = min(bytesToWrite, m_ulLoopbackBufferSize - m_ulLoopbackWritePos);
-        RtlCopyMemory(m_pLoopbackBuffer + m_ulLoopbackWritePos, Buffer, chunk);
+        ULONG chunk = min(bytesToWrite - bytesWritten, m_ulLoopbackBufferSize - m_ulLoopbackWritePos);
+        RtlCopyMemory(m_pLoopbackBuffer + m_ulLoopbackWritePos, Buffer + bytesWritten, chunk);
         m_ulLoopbackWritePos = (m_ulLoopbackWritePos + chunk) % m_ulLoopbackBufferSize;
         m_ulLoopbackDataAvailable += chunk;
-        Buffer += chunk;
-        bytesToWrite -= chunk;
+        bytesWritten += chunk;
     }
 
     KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
@@ -3114,7 +3136,8 @@ CAdapterCommon::ReadFromLoopbackBuffer
 Routine Description:
     Reads audio data from the circular loopback buffer.
     Uses proper circular buffer logic with read position tracking.
-    Waits for preroll threshold before starting to output audio.
+    Uses hysteresis for smooth operation with dynamic thresholds based on actual format.
+    Ensures sample-aligned reads to prevent audio distortion.
 Arguments:
     Buffer - Pointer to buffer to fill
     ByteCount - Number of bytes requested
@@ -3131,10 +3154,19 @@ Return Value:
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
 
-    // Check preroll threshold - wait until we have enough data buffered
+    // Fixed format: 16-bit stereo = 4 bytes per sample frame
+    // This MUST match the format in speakerwavtable.h and micarraywavtable.h
+    const ULONG bytesPerSample = LOOPBACK_BYTES_PER_SAMPLE;
+
+    // Calculate thresholds in bytes (fixed format)
+    const ULONG highWaterBytes = LOOPBACK_SAMPLES_HIGH_WATER * bytesPerSample;
+    const ULONG lowWaterBytes = LOOPBACK_SAMPLES_LOW_WATER * bytesPerSample;
+
+    // Hysteresis-based preroll management with dynamic thresholds
     if (!m_bLoopbackPrerollComplete)
     {
-        if (m_ulLoopbackDataAvailable >= LOOPBACK_MIN_DATA_THRESHOLD)
+        // Waiting for buffer to fill - check high water mark
+        if (m_ulLoopbackDataAvailable >= highWaterBytes)
         {
             m_bLoopbackPrerollComplete = TRUE;
         }
@@ -3146,9 +3178,30 @@ Return Value:
             return ByteCount;
         }
     }
+    else
+    {
+        // Currently outputting - check low water mark for underrun
+        if (m_ulLoopbackDataAvailable < lowWaterBytes)
+        {
+            // Buffer critically low - reset preroll to avoid crackling
+            m_bLoopbackPrerollComplete = FALSE;
+            RtlZeroMemory(Buffer, ByteCount);
+            KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
+            return ByteCount;
+        }
+    }
+
+    // Ensure we read sample-aligned data to prevent distortion
+    // Round down ByteCount to nearest sample boundary
+    ULONG alignedByteCount = (ByteCount / bytesPerSample) * bytesPerSample;
+    if (alignedByteCount == 0) alignedByteCount = ByteCount;  // Fallback if very small request
 
     // Read from circular buffer
-    ULONG bytesToRead = min(ByteCount, m_ulLoopbackDataAvailable);
+    ULONG bytesToRead = min(alignedByteCount, m_ulLoopbackDataAvailable);
+
+    // Also ensure bytesToRead is sample-aligned
+    bytesToRead = (bytesToRead / bytesPerSample) * bytesPerSample;
+
     ULONG bytesRead = 0;
 
     while (bytesRead < bytesToRead)
@@ -3183,13 +3236,24 @@ CAdapterCommon::SetLoopbackFormat
 /*++
 Routine Description:
     Sets the format for the loopback buffer.
+    Validates input parameters and resets buffer state.
 Arguments:
-    SampleRate - Sample rate in Hz
-    BitsPerSample - Bits per sample (16, 24, 32)
-    Channels - Number of channels
+    SampleRate - Sample rate in Hz (44100, 48000, 96000)
+    BitsPerSample - Bits per sample (8, 16, 24)
+    Channels - Number of channels (1 or 2)
 --*/
 {
     PAGED_CODE();
+
+    // Validate parameters to prevent division by zero and other issues
+    if (SampleRate == 0) SampleRate = 48000;
+    if (BitsPerSample == 0) BitsPerSample = 16;
+    if (Channels == 0) Channels = 2;
+
+    // Clamp to supported ranges
+    if (BitsPerSample < 8) BitsPerSample = 8;
+    if (BitsPerSample > 24) BitsPerSample = 24;
+    if (Channels > 2) Channels = 2;
 
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
@@ -3203,7 +3267,12 @@ Arguments:
     m_ulLoopbackReadPos = 0;
     m_ulLoopbackDataAvailable = 0;
     m_bLoopbackPrerollComplete = FALSE;  // Reset preroll for new stream
-    RtlZeroMemory(m_pLoopbackBuffer, m_ulLoopbackBufferSize);
+
+    // Zero the buffer while holding the lock (buffer is in NonPaged memory)
+    if (m_pLoopbackBuffer && m_ulLoopbackBufferSize > 0)
+    {
+        RtlZeroMemory(m_pLoopbackBuffer, m_ulLoopbackBufferSize);
+    }
 
     KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
 }

@@ -15,24 +15,28 @@ Abstract:
 #define _VIRTUALAUDIODRIVER_MICARRAYWAVTABLE_H_
 
 //=============================================================================
-// Stereo audio format support for ISL Virtual Mic (VB-Cable compatible)
-//
+// ISL Virtual Mic - FIXED FORMAT for guaranteed compatibility
+// CRITICAL: Both speaker and mic MUST use the same format to prevent
+// robotic voice distortion from sample rate mismatch.
+// Format: 48000 Hz, 16-bit, Stereo (matches desktop app AudioContext)
+//=============================================================================
 #define MICARRAY_RAW_CHANNELS               2
 #define MICARRAY_DEVICE_MAX_CHANNELS        2
-#define MICARRAY_MIN_BITS_PER_SAMPLE        8
-#define MICARRAY_MAX_BITS_PER_SAMPLE        24
-#define MICARRAY_MIN_SAMPLE_RATE            44100
-#define MICARRAY_MAX_SAMPLE_RATE            96000
+#define MICARRAY_MIN_BITS_PER_SAMPLE        16
+#define MICARRAY_MAX_BITS_PER_SAMPLE        16
+#define MICARRAY_MIN_SAMPLE_RATE            48000
+#define MICARRAY_MAX_SAMPLE_RATE            48000
 
 #define MICARRAY_MAX_INPUT_STREAMS          8
 
 //=============================================================================
-// Supported device formats - VB-Cable compatible (Stereo, 8/16/24 bit, 44100-96000 Hz)
-//
+// Supported device formats - SINGLE FORMAT ONLY to prevent mismatch
+// 48000 Hz, 16-bit, Stereo - MUST match speaker format exactly
+//=============================================================================
 static
 KSDATAFORMAT_WAVEFORMATEXTENSIBLE MicArrayPinSupportedDeviceFormats[] =
 {
-    // 0) 16-bit, Stereo, 48 kHz (most common)
+    // 16-bit, Stereo, 48 kHz - THE ONLY SUPPORTED FORMAT
     {
         {
             sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
@@ -48,142 +52,12 @@ KSDATAFORMAT_WAVEFORMATEXTENSIBLE MicArrayPinSupportedDeviceFormats[] =
                 WAVE_FORMAT_EXTENSIBLE,
                 2,                              // nChannels (STEREO)
                 48000,                          // nSamplesPerSec
-                48000 * 2 * 16 / 8,             // nAvgBytesPerSec
-                2 * 16 / 8,                     // nBlockAlign
+                48000 * 2 * 16 / 8,             // nAvgBytesPerSec = 192000
+                2 * 16 / 8,                     // nBlockAlign = 4
                 16,                             // wBitsPerSample
                 sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
             },
             16,                                 // wValidBitsPerSample
-            KSAUDIO_SPEAKER_STEREO,
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
-        }
-    },
-    // 1) 16-bit, Stereo, 44.1 kHz
-    {
-        {
-            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
-            0,
-            0,
-            0,
-            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
-            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
-        },
-        {
-            {
-                WAVE_FORMAT_EXTENSIBLE,
-                2,
-                44100,
-                44100 * 2 * 16 / 8,
-                2 * 16 / 8,
-                16,
-                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
-            },
-            16,
-            KSAUDIO_SPEAKER_STEREO,
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
-        }
-    },
-    // 2) 16-bit, Stereo, 96 kHz
-    {
-        {
-            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
-            0,
-            0,
-            0,
-            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
-            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
-        },
-        {
-            {
-                WAVE_FORMAT_EXTENSIBLE,
-                2,
-                96000,
-                96000 * 2 * 16 / 8,
-                2 * 16 / 8,
-                16,
-                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
-            },
-            16,
-            KSAUDIO_SPEAKER_STEREO,
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
-        }
-    },
-    // 3) 24-bit, Stereo, 48 kHz
-    {
-        {
-            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
-            0,
-            0,
-            0,
-            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
-            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
-        },
-        {
-            {
-                WAVE_FORMAT_EXTENSIBLE,
-                2,
-                48000,
-                48000 * 2 * 24 / 8,
-                2 * 24 / 8,
-                24,
-                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
-            },
-            24,
-            KSAUDIO_SPEAKER_STEREO,
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
-        }
-    },
-    // 4) 24-bit, Stereo, 44.1 kHz
-    {
-        {
-            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
-            0,
-            0,
-            0,
-            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
-            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
-        },
-        {
-            {
-                WAVE_FORMAT_EXTENSIBLE,
-                2,
-                44100,
-                44100 * 2 * 24 / 8,
-                2 * 24 / 8,
-                24,
-                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
-            },
-            24,
-            KSAUDIO_SPEAKER_STEREO,
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
-        }
-    },
-    // 5) 24-bit, Stereo, 96 kHz
-    {
-        {
-            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
-            0,
-            0,
-            0,
-            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
-            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
-            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
-        },
-        {
-            {
-                WAVE_FORMAT_EXTENSIBLE,
-                2,
-                96000,
-                96000 * 2 * 24 / 8,
-                2 * 24 / 8,
-                24,
-                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
-            },
-            24,
             KSAUDIO_SPEAKER_STEREO,
             STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
         }
@@ -219,7 +93,7 @@ PIN_DEVICE_FORMATS_AND_MODES MicArrayPinDeviceFormatsAndModes[] =
 };
 
 //=============================================================================
-// Data ranges for streaming pin - VB-Cable compatible (Stereo, 8/16/24 bit, 44100-96000 Hz)
+// Data ranges for streaming pin - FIXED to 48000 Hz, 16-bit, Stereo
 //
 static
 KSDATARANGE_AUDIO MicArrayPinDataRangesRawStream[] =
@@ -235,10 +109,10 @@ KSDATARANGE_AUDIO MicArrayPinDataRangesRawStream[] =
             STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
         },
         2,       // MaximumChannels (STEREO)
-        8,       // MinimumBitsPerSample
-        24,      // MaximumBitsPerSample
-        44100,   // MinimumSampleFrequency
-        96000    // MaximumSampleFrequency
+        16,      // MinimumBitsPerSample (FIXED)
+        16,      // MaximumBitsPerSample (FIXED)
+        48000,   // MinimumSampleFrequency (FIXED)
+        48000    // MaximumSampleFrequency (FIXED)
     }
 };
 
@@ -274,8 +148,8 @@ PKSDATARANGE MicArrayPinDataRangePointersBridge[] =
 //=============================================================================
 // Wave filter pin descriptors
 //
-static 
-PCPIN_DESCRIPTOR MicArrayWaveMiniportPins[] = 
+static
+PCPIN_DESCRIPTOR MicArrayWaveMiniportPins[] =
 {
     // Wave In Bridge Pin - 0
     {
@@ -300,7 +174,7 @@ PCPIN_DESCRIPTOR MicArrayWaveMiniportPins[] =
     // Wave Out Streaming Pin (Capture) - 1
     {
         MICARRAY_MAX_INPUT_STREAMS,
-        MICARRAY_MAX_INPUT_STREAMS, 
+        MICARRAY_MAX_INPUT_STREAMS,
         0,
         NULL,
         {

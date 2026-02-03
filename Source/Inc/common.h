@@ -564,13 +564,16 @@ DECLARE_INTERFACE_(IAdapterCommon, IUnknown)
 typedef IAdapterCommon *PADAPTERCOMMON;
 
 //=============================================================================
-// Loopback Buffer (VB-Cable compatible)
-// VB-Cable uses 7168 samples default, minimum stable is 2048 samples
-// Using 4096 samples for balance between latency (~85ms) and stability
-// Reference: https://vb-audio.com/Cable/VBCABLE_ReferenceManual.pdf
+// Loopback Buffer - FIXED FORMAT: 48000 Hz, 16-bit, Stereo
+// Both speaker and mic use identical format to prevent sample rate mismatch
+// which causes robotic voice distortion.
+// Reference: https://voicemeeter.com/quick-tips-stutters-crackling-sound-robot-voice/
+// Reference: https://forum.vb-audio.com/viewtopic.php?t=500
 //=============================================================================
-#define LOOPBACK_BUFFER_SIZE        (4096 * 2 * 2)              // 4096 samples * stereo * 16-bit = 16,384 bytes
-#define LOOPBACK_MIN_DATA_THRESHOLD (512 * 2 * 2)               // 512 samples preroll for stable startup
+#define LOOPBACK_BYTES_PER_SAMPLE      4                        // 16-bit stereo = 2 channels * 2 bytes = 4 bytes per sample frame
+#define LOOPBACK_BUFFER_SIZE           (7168 * LOOPBACK_BYTES_PER_SAMPLE)  // 7168 samples * 4 bytes = 28,672 bytes
+#define LOOPBACK_SAMPLES_HIGH_WATER    2048                     // Samples to buffer before starting output (~42ms at 48kHz)
+#define LOOPBACK_SAMPLES_LOW_WATER     512                      // Samples threshold for underrun detection (~10ms at 48kHz) if below
 
 //=============================================================================
 // Function Prototypes
