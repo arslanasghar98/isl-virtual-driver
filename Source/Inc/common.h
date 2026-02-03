@@ -534,9 +534,43 @@ DECLARE_INTERFACE_(IAdapterCommon, IUnknown)
 
     STDMETHOD_(VOID, Cleanup)();
 
+    //=========================================================================
+    // Loopback buffer methods - for routing audio from speaker to mic
+    //=========================================================================
+    STDMETHOD_(VOID,            WriteToLoopbackBuffer)
+    (
+        THIS_
+        _In_reads_bytes_(ByteCount) PBYTE   Buffer,
+        _In_                        ULONG   ByteCount
+    ) PURE;
+
+    STDMETHOD_(ULONG,           ReadFromLoopbackBuffer)
+    (
+        THIS_
+        _Out_writes_bytes_(ByteCount) PBYTE Buffer,
+        _In_                          ULONG ByteCount
+    ) PURE;
+
+    STDMETHOD_(VOID,            SetLoopbackFormat)
+    (
+        THIS_
+        _In_  ULONG   SampleRate,
+        _In_  ULONG   BitsPerSample,
+        _In_  ULONG   Channels
+    ) PURE;
+
 };
 
 typedef IAdapterCommon *PADAPTERCOMMON;
+
+//=============================================================================
+// Loopback Buffer (VB-Cable compatible)
+// VB-Cable uses 7168 samples default, minimum stable is 2048 samples
+// Using 4096 samples for balance between latency (~85ms) and stability
+// Reference: https://vb-audio.com/Cable/VBCABLE_ReferenceManual.pdf
+//=============================================================================
+#define LOOPBACK_BUFFER_SIZE        (4096 * 2 * 2)              // 4096 samples * stereo * 16-bit = 16,384 bytes
+#define LOOPBACK_MIN_DATA_THRESHOLD (512 * 2 * 2)               // 512 samples preroll for stable startup
 
 //=============================================================================
 // Function Prototypes

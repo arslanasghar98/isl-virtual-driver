@@ -287,6 +287,20 @@ Return Value:
     }
     RtlCopyMemory(m_pWfExt, pWfEx, sizeof(WAVEFORMATEX) + pWfEx->cbSize);
 
+    // Sync loopback format for render streams (speaker -> mic loopback)
+    if (!m_bCapture)
+    {
+        PADAPTERCOMMON pAdapterComm = m_pMiniport->GetAdapterCommObj();
+        if (pAdapterComm)
+        {
+            pAdapterComm->SetLoopbackFormat(
+                m_pWfExt->Format.nSamplesPerSec,
+                m_pWfExt->Format.wBitsPerSample,
+                m_pWfExt->Format.nChannels
+            );
+        }
+    }
+
     m_pbMuted = (PBOOL)ExAllocatePool2(POOL_FLAG_NON_PAGED, m_pWfExt->Format.nChannels * sizeof(BOOL), MINWAVERTSTREAM_POOLTAG);
     if (m_pbMuted == NULL)
     {
@@ -1445,11 +1459,9 @@ VOID CMiniportWaveRTStream::UpdatePosition
             m_bLastBufferRendered = TRUE;
         }
 
-        if (!g_DoNotCreateDataFiles)
-        {
-            // Read from buffer and write to a file.
-            ReadBytes(ByteDisplacement);
-        }
+        // Always call ReadBytes for loopback functionality
+        // (file saving inside ReadBytes is conditional on g_DoNotCreateDataFiles)
+        ReadBytes(ByteDisplacement);
     }
     
     // Increment the DMA position by the number of bytes displaced since the last
@@ -1478,7 +1490,8 @@ VOID CMiniportWaveRTStream::WriteBytes
 
 Routine Description:
 
-This function writes the audio buffer using silence instead of a tone generator
+This function reads from the loopback buffer (speaker audio) into the capture buffer.
+This implements true loopback: audio played to ISL Speaker is captured from ISL Mic.
 
 Arguments:
 
@@ -1487,16 +1500,25 @@ ByteDisplacement - # of bytes to process.
 --*/
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
+    PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-        
-        // Instead of generating a tone, just output silence
-        RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
-           	
+
+        // Read from loopback buffer (audio from speaker goes to microphone)
+        if (pAdapterComm)
+        {
+            pAdapterComm->ReadFromLoopbackBuffer(m_pDmaBuffer + bufferOffset, runWrite);
+        }
+        else
+        {
+            // Fallback to silence if no adapter
+            RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
+        }
+
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }
@@ -1512,7 +1534,7 @@ VOID CMiniportWaveRTStream::ReadBytes
 
 Routine Description:
 
-This function reads the audio buffer and saves the data in a file.
+This function reads the audio buffer, saves to file, and writes to loopback buffer.
 
 Arguments:
 
@@ -1521,13 +1543,26 @@ ByteDisplacement - # of bytes to process.
 --*/
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
+    PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-        m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);
+
+        // Save to file (only if file saving is enabled)
+        if (!g_DoNotCreateDataFiles)
+        {
+            m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);
+        }
+
+        // ALWAYS write to loopback buffer for capture to read (speaker -> mic routing)
+        if (pAdapterComm)
+        {
+            pAdapterComm->WriteToLoopbackBuffer(m_pDmaBuffer + bufferOffset, runWrite);
+        }
+
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }

@@ -25,7 +25,11 @@
       "Bash(cmd.exe /c \"set PATH=%PATH%;C:\\\\Program Files \\(x86\\)\\\\Windows Kits\\\\10\\\\bin\\\\10.0.26100.0\\\\x64 && smctl sign --keypair-alias key_1435973180 --tool signtool --input \"\"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\x64\\\\Release\\\\virtualaudiodriver.cat\"\" --verbose\")",
       "Bash(cmd.exe /c \"smctl certificate ls\")",
       "Bash(cmd.exe /c \"smctl windows certsync --keypair-alias key_1435973180\")",
-      "Bash(cmd.exe /c \"pnputil /delete-driver oem134.inf /uninstall /force\")"
+      "Bash(cmd.exe /c \"pnputil /delete-driver oem134.inf /uninstall /force\")",
+      "Bash(msbuild:*)",
+      "Bash(cmd /c:*)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\VirtualAudioDriver.sln\" /p:Configuration=Release /p:Platform=x64 /t:Rebuild)",
+      "Bash(cmd.exe:*)"
     ]
   }
 }

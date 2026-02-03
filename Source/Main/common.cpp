@@ -297,6 +297,27 @@ class CAdapterCommon :
         STDMETHODIMP_(VOID) Cleanup();
 
         //=====================================================================
+        // Loopback buffer methods
+        STDMETHODIMP_(VOID)     WriteToLoopbackBuffer
+        (
+            _In_reads_bytes_(ByteCount) PBYTE   Buffer,
+            _In_                        ULONG   ByteCount
+        );
+
+        STDMETHODIMP_(ULONG)    ReadFromLoopbackBuffer
+        (
+            _Out_writes_bytes_(ByteCount) PBYTE Buffer,
+            _In_                          ULONG ByteCount
+        );
+
+        STDMETHODIMP_(VOID)     SetLoopbackFormat
+        (
+            _In_  ULONG   SampleRate,
+            _In_  ULONG   BitsPerSample,
+            _In_  ULONG   Channels
+        );
+
+        //=====================================================================
         // friends
         friend NTSTATUS         NewAdapterCommon
         ( 
@@ -307,6 +328,19 @@ class CAdapterCommon :
         );
 
     private:
+
+    //=====================================================================
+    // Loopback buffer members
+    PBYTE       m_pLoopbackBuffer;          // Circular buffer for loopback audio
+    ULONG       m_ulLoopbackBufferSize;     // Size of the buffer
+    ULONG       m_ulLoopbackWritePos;       // Write position
+    ULONG       m_ulLoopbackReadPos;        // Read position
+    ULONG       m_ulLoopbackDataAvailable;  // Amount of data available
+    KSPIN_LOCK  m_LoopbackSpinLock;         // Spinlock for thread safety
+    ULONG       m_ulLoopbackSampleRate;     // Sample rate
+    ULONG       m_ulLoopbackBitsPerSample;  // Bits per sample
+    ULONG       m_ulLoopbackChannels;       // Number of channels
+    BOOLEAN     m_bLoopbackPrerollComplete; // Preroll threshold reached flag
 
     LIST_ENTRY m_SubdeviceCache;
 
@@ -502,7 +536,14 @@ Return Value:
         delete m_pHW;
         m_pHW = NULL;
     }
-    
+
+    // Free loopback buffer
+    if (m_pLoopbackBuffer)
+    {
+        ExFreePoolWithTag(m_pLoopbackBuffer, MINADAPTER_POOLTAG);
+        m_pLoopbackBuffer = NULL;
+    }
+
     CSaveData::DestroyWorkItems();
     SAFE_RELEASE(m_pPortClsEtwHelper);
     SAFE_RELEASE(m_pServiceGroupWave);
@@ -665,6 +706,27 @@ Return Value:
     IF_FAILED_JUMP(ntStatus, Done);
     
     m_pHW->MixerReset();
+
+    //
+    // Initialize loopback buffer for speaker-to-mic routing
+    //
+    m_ulLoopbackBufferSize = LOOPBACK_BUFFER_SIZE;
+    m_pLoopbackBuffer = (PBYTE)ExAllocatePool2(POOL_FLAG_NON_PAGED, m_ulLoopbackBufferSize, MINADAPTER_POOLTAG);
+    if (!m_pLoopbackBuffer)
+    {
+        DPF(D_TERSE, ("Insufficient memory for loopback buffer"));
+        ntStatus = STATUS_INSUFFICIENT_RESOURCES;
+        goto Done;
+    }
+    RtlZeroMemory(m_pLoopbackBuffer, m_ulLoopbackBufferSize);
+    m_ulLoopbackWritePos = 0;
+    m_ulLoopbackReadPos = 0;
+    m_ulLoopbackDataAvailable = 0;
+    m_ulLoopbackSampleRate = 48000;
+    m_ulLoopbackBitsPerSample = 16;
+    m_ulLoopbackChannels = 2;  // STEREO (VB-Cable compatible)
+    m_bLoopbackPrerollComplete = FALSE;  // Preroll not yet complete
+    KeInitializeSpinLock(&m_LoopbackSpinLock);
 
     //
     // Initialize SaveData class.
@@ -2986,4 +3048,162 @@ Exit:
     }
 
     return ntStatus;
+}
+
+//=============================================================================
+// Loopback Buffer Implementation
+//=============================================================================
+
+#pragma code_seg()
+STDMETHODIMP_(VOID)
+CAdapterCommon::WriteToLoopbackBuffer
+(
+    _In_reads_bytes_(ByteCount) PBYTE   Buffer,
+    _In_                        ULONG   ByteCount
+)
+/*++
+Routine Description:
+    Writes audio data to circular loopback buffer (VB-Cable style).
+    If buffer overflows, oldest data is overwritten.
+Arguments:
+    Buffer - Pointer to audio data
+    ByteCount - Number of bytes to write
+--*/
+{
+    if (!m_pLoopbackBuffer || !Buffer || ByteCount == 0)
+    {
+        return;
+    }
+
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
+
+    ULONG bytesToWrite = ByteCount;
+    ULONG bufferSpace = m_ulLoopbackBufferSize - m_ulLoopbackDataAvailable;
+
+    // If buffer would overflow, advance read position (overwrite oldest data)
+    if (bytesToWrite > bufferSpace)
+    {
+        ULONG overflow = bytesToWrite - bufferSpace;
+        m_ulLoopbackReadPos = (m_ulLoopbackReadPos + overflow) % m_ulLoopbackBufferSize;
+        m_ulLoopbackDataAvailable -= overflow;
+    }
+
+    // Write to circular buffer
+    while (bytesToWrite > 0)
+    {
+        ULONG chunk = min(bytesToWrite, m_ulLoopbackBufferSize - m_ulLoopbackWritePos);
+        RtlCopyMemory(m_pLoopbackBuffer + m_ulLoopbackWritePos, Buffer, chunk);
+        m_ulLoopbackWritePos = (m_ulLoopbackWritePos + chunk) % m_ulLoopbackBufferSize;
+        m_ulLoopbackDataAvailable += chunk;
+        Buffer += chunk;
+        bytesToWrite -= chunk;
+    }
+
+    KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
+}
+
+#pragma code_seg()
+STDMETHODIMP_(ULONG)
+CAdapterCommon::ReadFromLoopbackBuffer
+(
+    _Out_writes_bytes_(ByteCount) PBYTE Buffer,
+    _In_                          ULONG ByteCount
+)
+/*++
+Routine Description:
+    Reads audio data from the circular loopback buffer.
+    Uses proper circular buffer logic with read position tracking.
+    Waits for preroll threshold before starting to output audio.
+Arguments:
+    Buffer - Pointer to buffer to fill
+    ByteCount - Number of bytes requested
+Return Value:
+    Number of bytes actually read (always returns ByteCount, fills with silence if needed)
+--*/
+{
+    if (!m_pLoopbackBuffer || !Buffer || ByteCount == 0)
+    {
+        RtlZeroMemory(Buffer, ByteCount);
+        return ByteCount;
+    }
+
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
+
+    // Check preroll threshold - wait until we have enough data buffered
+    if (!m_bLoopbackPrerollComplete)
+    {
+        if (m_ulLoopbackDataAvailable >= LOOPBACK_MIN_DATA_THRESHOLD)
+        {
+            m_bLoopbackPrerollComplete = TRUE;
+        }
+        else
+        {
+            // Not enough data yet, output silence
+            RtlZeroMemory(Buffer, ByteCount);
+            KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
+            return ByteCount;
+        }
+    }
+
+    // Read from circular buffer
+    ULONG bytesToRead = min(ByteCount, m_ulLoopbackDataAvailable);
+    ULONG bytesRead = 0;
+
+    while (bytesRead < bytesToRead)
+    {
+        ULONG chunk = min(bytesToRead - bytesRead, m_ulLoopbackBufferSize - m_ulLoopbackReadPos);
+        RtlCopyMemory(Buffer + bytesRead, m_pLoopbackBuffer + m_ulLoopbackReadPos, chunk);
+        m_ulLoopbackReadPos = (m_ulLoopbackReadPos + chunk) % m_ulLoopbackBufferSize;
+        bytesRead += chunk;
+    }
+
+    m_ulLoopbackDataAvailable -= bytesRead;
+
+    // Fill remaining with silence if not enough data
+    if (bytesRead < ByteCount)
+    {
+        RtlZeroMemory(Buffer + bytesRead, ByteCount - bytesRead);
+    }
+
+    KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
+
+    return ByteCount;
+}
+
+#pragma code_seg("PAGE")
+STDMETHODIMP_(VOID)
+CAdapterCommon::SetLoopbackFormat
+(
+    _In_  ULONG   SampleRate,
+    _In_  ULONG   BitsPerSample,
+    _In_  ULONG   Channels
+)
+/*++
+Routine Description:
+    Sets the format for the loopback buffer.
+Arguments:
+    SampleRate - Sample rate in Hz
+    BitsPerSample - Bits per sample (16, 24, 32)
+    Channels - Number of channels
+--*/
+{
+    PAGED_CODE();
+
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
+
+    m_ulLoopbackSampleRate = SampleRate;
+    m_ulLoopbackBitsPerSample = BitsPerSample;
+    m_ulLoopbackChannels = Channels;
+
+    // Clear buffer on format change and reset preroll
+    m_ulLoopbackWritePos = 0;
+    m_ulLoopbackReadPos = 0;
+    m_ulLoopbackDataAvailable = 0;
+    m_bLoopbackPrerollComplete = FALSE;  // Reset preroll for new stream
+    RtlZeroMemory(m_pLoopbackBuffer, m_ulLoopbackBufferSize);
+
+    KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
 }

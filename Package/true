@@ -3,7 +3,7 @@ Signature   = "$Windows NT$"
 Class       = MEDIA
 Provider    = %ProviderName%
 ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-DriverVer   = 01/30/2026, 1.0.0.3
+DriverVer   = 02/03/2026, 1.0.0.10
 CatalogFile = VirtualAudioDriver.cat
 PnpLockDown = 1
 
