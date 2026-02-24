@@ -3,7 +3,7 @@ Signature   = "$Windows NT$"
 Class       = MEDIA
 Provider    = %ProviderName%
 ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-DriverVer   = 02/03/2026, 1.0.0.13
+DriverVer   = 02/23/2026, 1.0.0.14
 CatalogFile = VirtualAudioDriver.cat
 PnpLockDown = 1
 
@@ -29,7 +29,7 @@ PETrust=true
 %VIRTUALAUDIODRIVER_SA.DeviceDesc%=VIRTUALAUDIODRIVER_SA, ROOT\VirtualAudioDriver
 
 [DestinationDirs]
-VIRTUALAUDIODRIVER_SA.CopyList=13 ; 13=Package's DriverStore directory
+VIRTUALAUDIODRIVER_SA.CopyList=12 ; 12=System32\drivers (reliable across all machines)
 
 ;======================================================
 ; VIRTUALAUDIODRIVER_SA
@@ -157,7 +157,7 @@ DisplayName=%VirtualAudioDriver.SvcDesc%
 ServiceType=1
 StartType=3
 ErrorControl=1
-ServiceBinary=%13%\virtualaudiodriver.sys
+ServiceBinary=%12%\virtualaudiodriver.sys
 
 [VIRTUALAUDIODRIVER_SA.NT.HW]
 AddReg = AUDIOHW.AddReg
