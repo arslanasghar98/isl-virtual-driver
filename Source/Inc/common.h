@@ -559,6 +559,21 @@ DECLARE_INTERFACE_(IAdapterCommon, IUnknown)
         _In_  ULONG   Channels
     ) PURE;
 
+    //=========================================================================
+    // Mic engagement notification methods - signals user-mode apps when mic starts/stops
+    //=========================================================================
+    STDMETHOD_(VOID,            NotifyMicEngaged)
+    (
+        THIS_
+        _In_  BOOLEAN IsCapture
+    ) PURE;
+
+    STDMETHOD_(VOID,            NotifyMicDisengaged)
+    (
+        THIS_
+        _In_  BOOLEAN IsCapture
+    ) PURE;
+
 };
 
 typedef IAdapterCommon *PADAPTERCOMMON;

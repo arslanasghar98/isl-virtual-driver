@@ -1243,6 +1243,17 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 KeFlushQueuedDpcs();
             }
 
+            // Notify user-mode that microphone is disengaged (for capture streams)
+            // Do this BEFORE state change to ensure proper cleanup ordering
+            if (m_bCapture)
+            {
+                PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
+                if (pAdapterComm)
+                {
+                    pAdapterComm->NotifyMicDisengaged(TRUE);
+                }
+            }
+
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
 
             // Update state FIRST under spinlock to prevent timer callback from running
@@ -1358,6 +1369,16 @@ NTSTATUS CMiniportWaveRTStream::SetState
                         HNSTIME_PER_MILLISECOND, // 1 ms
                         NULL
                      );
+                }
+
+                // Notify user-mode that microphone is engaged (for capture streams)
+                if (m_bCapture)
+                {
+                    PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
+                    if (pAdapterComm)
+                    {
+                        pAdapterComm->NotifyMicEngaged(TRUE);
+                    }
                 }
             }
             return ntStatus;  // State already updated, return early

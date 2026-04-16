@@ -318,6 +318,18 @@ class CAdapterCommon :
         );
 
         //=====================================================================
+        // Mic engagement notification methods
+        STDMETHODIMP_(VOID)     NotifyMicEngaged
+        (
+            _In_  BOOLEAN IsCapture
+        );
+
+        STDMETHODIMP_(VOID)     NotifyMicDisengaged
+        (
+            _In_  BOOLEAN IsCapture
+        );
+
+        //=====================================================================
         // friends
         friend NTSTATUS         NewAdapterCommon
         ( 
@@ -341,6 +353,12 @@ class CAdapterCommon :
     ULONG       m_ulLoopbackBitsPerSample;  // Bits per sample
     ULONG       m_ulLoopbackChannels;       // Number of channels
     BOOLEAN     m_bLoopbackPrerollComplete; // Preroll threshold reached flag
+
+    //=====================================================================
+    // Mic engagement notification members
+    HANDLE      m_hMicEngagedEvent;         // Named event for mic engagement notification
+    PKEVENT     m_pMicEngagedEvent;         // Kernel event object
+    LONG        m_lMicEngagedCount;         // Count of active capture streams
 
     LIST_ENTRY m_SubdeviceCache;
 
@@ -544,6 +562,14 @@ Return Value:
         m_pLoopbackBuffer = NULL;
     }
 
+    // Close mic engagement notification event
+    if (m_hMicEngagedEvent)
+    {
+        ZwClose(m_hMicEngagedEvent);
+        m_hMicEngagedEvent = NULL;
+        m_pMicEngagedEvent = NULL;
+    }
+
     CSaveData::DestroyWorkItems();
     SAFE_RELEASE(m_pPortClsEtwHelper);
     SAFE_RELEASE(m_pServiceGroupWave);
@@ -727,6 +753,34 @@ Return Value:
     m_ulLoopbackChannels = 2;  // STEREO (VB-Cable compatible)
     m_bLoopbackPrerollComplete = FALSE;  // Preroll not yet complete
     KeInitializeSpinLock(&m_LoopbackSpinLock);
+
+    //
+    // Initialize mic engagement notification
+    //
+    m_hMicEngagedEvent = NULL;
+    m_pMicEngagedEvent = NULL;
+    m_lMicEngagedCount = 0;
+
+    // Create named event for user-mode notification with permissive security
+    // User-mode apps can wait on "Global\ISLMicEngaged" to detect when mic is in use
+    // First try IoCreateNotificationEvent for simplicity, it creates with default kernel security
+    // TODO: For non-admin user access, may need custom security descriptor
+    {
+        UNICODE_STRING eventName;
+        RtlInitUnicodeString(&eventName, L"\\BaseNamedObjects\\Global\\ISLMicEngaged");
+        m_pMicEngagedEvent = IoCreateNotificationEvent(&eventName, &m_hMicEngagedEvent);
+        if (m_pMicEngagedEvent)
+        {
+            // Start with event cleared (mic not engaged)
+            KeClearEvent(m_pMicEngagedEvent);
+            DPF(D_TERSE, ("Created ISLMicEngaged notification event"));
+        }
+        else
+        {
+            DPF(D_TERSE, ("Warning: Failed to create ISLMicEngaged notification event"));
+            // Not a fatal error - driver works without notification
+        }
+    }
 
     //
     // Initialize SaveData class.
@@ -3275,4 +3329,75 @@ Arguments:
     }
 
     KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
+}
+
+//=============================================================================
+// Mic Engagement Notification Implementation
+//=============================================================================
+
+#pragma code_seg()
+STDMETHODIMP_(VOID)
+CAdapterCommon::NotifyMicEngaged
+(
+    _In_  BOOLEAN IsCapture
+)
+/*++
+Routine Description:
+    Called when a capture stream starts (enters KSSTATE_RUN).
+    Signals the named event so user-mode apps know the mic is in use.
+    Thread-safe via interlocked operations.
+Arguments:
+    IsCapture - TRUE if this is a capture stream (microphone)
+--*/
+{
+    if (!IsCapture)
+    {
+        return;  // Only track capture streams
+    }
+
+    LONG newCount = InterlockedIncrement(&m_lMicEngagedCount);
+
+    // Signal the event when first capture stream starts
+    if (newCount == 1 && m_pMicEngagedEvent)
+    {
+        KeSetEvent(m_pMicEngagedEvent, IO_NO_INCREMENT, FALSE);
+        DPF(D_TERSE, ("ISL Mic Engaged - signaling user-mode"));
+    }
+}
+
+#pragma code_seg()
+STDMETHODIMP_(VOID)
+CAdapterCommon::NotifyMicDisengaged
+(
+    _In_  BOOLEAN IsCapture
+)
+/*++
+Routine Description:
+    Called when a capture stream stops (enters KSSTATE_STOP).
+    Clears the named event when all capture streams have stopped.
+    Thread-safe via interlocked operations.
+Arguments:
+    IsCapture - TRUE if this is a capture stream (microphone)
+--*/
+{
+    if (!IsCapture)
+    {
+        return;  // Only track capture streams
+    }
+
+    LONG newCount = InterlockedDecrement(&m_lMicEngagedCount);
+
+    // Prevent underflow
+    if (newCount < 0)
+    {
+        InterlockedExchange(&m_lMicEngagedCount, 0);
+        newCount = 0;
+    }
+
+    // Clear the event when last capture stream stops
+    if (newCount == 0 && m_pMicEngagedEvent)
+    {
+        KeClearEvent(m_pMicEngagedEvent);
+        DPF(D_TERSE, ("ISL Mic Disengaged - clearing signal"));
+    }
 }
