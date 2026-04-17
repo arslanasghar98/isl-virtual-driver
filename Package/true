@@ -211,23 +211,23 @@ SPEAKER_CUSTOM_NAMEGUID   = "{7ae81ff4-203e-4fe1-88aa-f2d57775cd4b}"
 
 ;Localizable
 
-ProviderName = "MikeTheTech"
-MfgName       = "MikeTheTech"
-MsCopyRight   = "MikeTheTech"
+ProviderName = "CallJoyna"
+MfgName       = "CallJoyna"
+MsCopyRight   = "CallJoyna"
 
-VIRTUALAUDIODRIVER_SA.DeviceDesc="ISL Audio"
-VirtualAudioDriver.SvcDesc="ISL Audio Service"
+VIRTUALAUDIODRIVER_SA.DeviceDesc="CallJoyna Audio"
+VirtualAudioDriver.SvcDesc="CallJoyna Audio Service"
 
 ;; friendly names
-VIRTUALAUDIODRIVER.WaveSpeaker.szPname="ISL Speaker"
-VIRTUALAUDIODRIVER.TopologySpeaker.szPname="ISL Speaker"
+VIRTUALAUDIODRIVER.WaveSpeaker.szPname="CallJoyna Speaker"
+VIRTUALAUDIODRIVER.TopologySpeaker.szPname="CallJoyna Speaker"
 
-VIRTUALAUDIODRIVER.WaveMicArray1.szPname="ISL Mic"
-VIRTUALAUDIODRIVER.TopologyMicArray1.szPname="ISL Mic"
+VIRTUALAUDIODRIVER.WaveMicArray1.szPname="CallJoyna Mic"
+VIRTUALAUDIODRIVER.TopologyMicArray1.szPname="CallJoyna Mic"
 
 ; Custom endpoint names for MediaCategories
-MicCustomName     = "ISL Mic"
-SpeakerCustomName = "ISL Speaker"
+MicCustomName     = "CallJoyna Mic"
+SpeakerCustomName = "CallJoyna Speaker"
 
-MicArray1CustomName= "ISL Mic"
+MicArray1CustomName= "CallJoyna Mic"
 
