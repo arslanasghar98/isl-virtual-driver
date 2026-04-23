@@ -1,6 +1,6 @@
 # Virtual Audio Driver - Installation Guide
 
-This guide explains how to install and uninstall the Virtual Audio Driver (ISL Speaker/Mic).
+This guide explains how to install and uninstall the Virtual Audio Driver (CallJoyna Speaker/Mic).
 
 ## Contents
 
@@ -64,15 +64,15 @@ If the automated installation doesn't create the device automatically:
 6. Click **Browse...** and navigate to: `D:\Datics\Virtual-Audio-Driver\x64\Debug\`
 7. Select `VirtualAudioDriver.inf` and click **Open**
 8. Click **OK**
-9. Select **ISL Speaker** from the list
+9. Select **CallJoyna Speaker** from the list
 10. Click **Next** > **Next** > **Finish**
 
 ## Verification
 
 After installation, you should see the following audio devices in Sound Settings:
 
-- **ISL Speaker** - Virtual audio output device
-- **ISL Mic** - Virtual audio input device (microphone)
+- **CallJoyna Speaker** - Virtual audio output device
+- **CallJoyna Mic** - Virtual audio input device (microphone)
 
 To verify:
 1. Right-click the speaker icon in the system tray
@@ -91,7 +91,7 @@ To verify:
 
 1. Open **Device Manager**
 2. Expand **Sound, video and game controllers**
-3. Right-click on **ISL Speaker** (or any ISL device)
+3. Right-click on **CallJoyna Speaker** (or any CallJoyna device)
 4. Select **Uninstall device**
 5. Check **Delete the driver software for this device**
 6. Click **Uninstall**
@@ -124,8 +124,8 @@ pnputil /delete-driver oemXX.inf /uninstall /force
 
 **Issue**: Device appears but no audio
 **Solution**:
-1. Set ISL Speaker as the default playback device
-2. Set ISL Mic as the default recording device
+1. Set CallJoyna Speaker as the default playback device
+2. Set CallJoyna Mic as the default recording device
 3. Check volume levels aren't muted
 
 ### "Test Mode" Watermark

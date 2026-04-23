@@ -359,6 +359,9 @@ class CAdapterCommon :
     HANDLE      m_hMicEngagedEvent;         // Named event for mic engagement notification
     PKEVENT     m_pMicEngagedEvent;         // Kernel event object
     LONG        m_lMicEngagedCount;         // Count of active capture streams
+    LARGE_INTEGER m_liInitTimestamp;        // Performance counter at driver init
+    LARGE_INTEGER m_liPerfFrequency;        // Performance counter frequency
+    BOOLEAN     m_bStartupComplete;         // TRUE after startup delay period
 
     LIST_ENTRY m_SubdeviceCache;
 
@@ -760,6 +763,8 @@ Return Value:
     m_hMicEngagedEvent = NULL;
     m_pMicEngagedEvent = NULL;
     m_lMicEngagedCount = 0;
+    m_bStartupComplete = FALSE;
+    m_liInitTimestamp = KeQueryPerformanceCounter(&m_liPerfFrequency);  // Record driver init time
 
     // Create named event for user-mode notification with permissive security
     // User-mode apps can wait on "Global\ISLMicEngaged" to detect when mic is in use
@@ -3346,6 +3351,10 @@ Routine Description:
     Called when a capture stream starts (enters KSSTATE_RUN).
     Signals the named event so user-mode apps know the mic is in use.
     Thread-safe via interlocked operations.
+
+    NOTE: We ignore mic engagement signaling during the first 5 seconds after driver init
+    to avoid false positives from Windows audio service device enumeration.
+    The count is still tracked, but the event is not signaled during startup.
 Arguments:
     IsCapture - TRUE if this is a capture stream (microphone)
 --*/
@@ -3357,11 +3366,34 @@ Arguments:
 
     LONG newCount = InterlockedIncrement(&m_lMicEngagedCount);
 
-    // Signal the event when first capture stream starts
-    if (newCount == 1 && m_pMicEngagedEvent)
+    // Check if startup period has passed (5 seconds)
+    // This prevents false engagement signals from Windows audio enumeration at boot
+    if (!m_bStartupComplete)
+    {
+        LARGE_INTEGER currentTime;
+        currentTime = KeQueryPerformanceCounter(NULL);
+
+        // Calculate elapsed time in seconds using performance counter frequency
+        // elapsedTicks / frequency = elapsed seconds
+        LONGLONG elapsedTicks = currentTime.QuadPart - m_liInitTimestamp.QuadPart;
+        LONGLONG elapsedSeconds = elapsedTicks / m_liPerfFrequency.QuadPart;
+
+        if (elapsedSeconds < 5)  // Less than 5 seconds
+        {
+            DPF(D_TERSE, ("ISL Mic Engaged IGNORED - still in startup period (%lld sec elapsed, count=%ld)", elapsedSeconds, newCount));
+            return;  // Don't signal during startup period, but count is tracked
+        }
+
+        // Startup period complete
+        m_bStartupComplete = TRUE;
+        DPF(D_TERSE, ("ISL Mic startup period complete - now tracking engagement"));
+    }
+
+    // Signal the event when first capture stream starts (or if already engaged after startup)
+    if (newCount >= 1 && m_pMicEngagedEvent)
     {
         KeSetEvent(m_pMicEngagedEvent, IO_NO_INCREMENT, FALSE);
-        DPF(D_TERSE, ("ISL Mic Engaged - signaling user-mode"));
+        DPF(D_TERSE, ("ISL Mic Engaged - signaling user-mode (count=%ld)", newCount));
     }
 }
 

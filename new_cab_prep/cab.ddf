@@ -1,0 +1,12 @@
+.OPTION EXPLICIT
+.Set CabinetNameTemplate=VirtualAudioDriver.cab
+.Set DiskDirectoryTemplate=CDROM
+.Set CompressionType=MSZIP
+.Set UniqueFiles=OFF
+.Set Cabinet=ON
+.Set DiskDirectory1=D:\Datics\Virtual-Audio-Driver\new_cab_output
+
+.Set DestinationDir=VirtualAudioDriver
+"D:\Datics\Virtual-Audio-Driver\new_cab_prep\VirtualAudioDriver\VirtualAudioDriver.inf"
+"D:\Datics\Virtual-Audio-Driver\new_cab_prep\VirtualAudioDriver\virtualaudiodriver.sys"
+"D:\Datics\Virtual-Audio-Driver\new_cab_prep\VirtualAudioDriver\virtualaudiodriver.cat"
