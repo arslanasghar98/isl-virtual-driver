@@ -1,6 +1,6 @@
 ;*** BEGIN **********************************************************
 ;**                                                                **
-;** Automatically generated on: Mon Apr 27 16:43:47 2026           **
+;** Automatically generated on: Tue Apr 28 18:38:01 2026           **
 ;**                                                                **
 ;** MakeCAB Version: 5.00                                 **
 ;**                                                                **
@@ -12,10 +12,11 @@
 [file list]
 1,1,VirtualAudioDriver\VirtualAudioDriver.inf,10428
 1,1,VirtualAudioDriver\virtualaudiodriver.sys,114392
+1,1,VirtualAudioDriver\virtualaudiodriver.cat,13386
 1,1,VirtualAudioDriver\virtualaudiodriver.pdb,1290240
 1,1,VirtualAudioDriver\CallJoyna.ico,431558
 ;*** END ************************************************************
 ;**                                                                **
-;** Automatically generated on: Mon Apr 27 16:43:47 2026           **
+;** Automatically generated on: Tue Apr 28 18:38:01 2026           **
 ;**                                                                **
 ;*** END ************************************************************

@@ -12,5 +12,6 @@
 .Set DestinationDir=VirtualAudioDriver
 D:\Datics\Virtual-Audio-Driver\x64\Release\VirtualAudioDriver.inf
 D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.sys
+D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.cat
 D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.pdb
 D:\Datics\Virtual-Audio-Driver\x64\Release\CallJoyna.ico

@@ -3,7 +3,7 @@ Signature   = "$Windows NT$"
 Class       = MEDIA
 Provider    = %ProviderName%
 ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-DriverVer = 04/27/2026,1.0.0.21
+DriverVer = 04/28/2026,1.0.0.22
 CatalogFile = VirtualAudioDriver.cat
 PnpLockDown = 1
 
@@ -24,9 +24,9 @@ DRMLevel=1300
 PETrust=true
 
 [Manufacturer]
-%MfgName%=VIRTUALAUDIODRIVER,NTamd64.10.0...22000
+%MfgName%=VIRTUALAUDIODRIVER,NTamd64.10.0...17763
 
-[VIRTUALAUDIODRIVER.NTamd64.10.0...22000]
+[VIRTUALAUDIODRIVER.NTamd64.10.0...17763]
 %VIRTUALAUDIODRIVER_SA.DeviceDesc%=VIRTUALAUDIODRIVER_SA, ROOT\VirtualAudioDriver
 
 [DestinationDirs]

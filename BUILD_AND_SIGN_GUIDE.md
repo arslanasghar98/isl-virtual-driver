@@ -2,6 +2,12 @@
 
 This document describes how to compile, sign, and package the CallJoyna Audio Driver.
 
+> **INF authoring lessons learned (must-read for INF edits):**
+> - **Custom endpoint icon (Device Manager + Sound panel):** use `HKR,EP\0,%DEVPKEY_DeviceClass_IconPath%,0x00020000,"%%SystemRoot%%\System32\drivers\CallJoyna.ico"` on each topology endpoint AddReg. `DEVPKEY_DeviceClass_IconPath = "{259ABFFC-50A7-47CE-AF08-68C9A7D73366},12"`. `PKEY_AudioEndpoint_IconPath` (`{F1AB780D-...},0`) covers the modern Sound settings icon. **`DEVPKEY_DrvPkg_Icon` cannot be used via INF `AddProperty` — InfVerif rejects it (error 1081).** Flag `0x00020000` (REG_EXPAND_SZ) is required so `%SystemRoot%` resolves; `0x00000000` leaves the literal string in the registry and Windows fails silently.
+> - **OS decoration:** `[VIRTUALAUDIODRIVER.NTamd64.10.0...22000]` is **Win11 only** (build 22000+) and Code 28 on Win10. Use `NTamd64.10.0...17763` to cover Win10 1809+ and all Win11 (and update both the `[Manufacturer]` line and the model section).
+> - **DriverVer:** bump on every change. PnP refuses equal-version reinstalls.
+> - **Validate before building:** `InfVerif.exe /v VirtualAudioDriver.inf` catches GUID typos, AddProperty issues, and section-ordering errors before you spend time on `inf2cat`/sign.
+
 ---
 
 ## Prerequisites
@@ -161,14 +167,32 @@ Remove-Item "D:\Datics\Virtual-Audio-Driver\build_cab.ddf" -Force
 
 ---
 
-## Step 5: Create CAB for Microsoft Partner Center (Optional)
+## Step 5: Create CAB for Microsoft Partner Center
 
-For WHQL/Attestation signing, Microsoft requires the PDB file.
+### 5.1 Required CAB contents
 
-### 5.1 Create Partner Center DDF
+Per [Microsoft's attestation signing docs](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/code-signing-attestation), a Partner Center CAB **must contain** all of the following inside a single subfolder (no files at the CAB root):
 
-```
+| File | Required? | Notes |
+|---|---|---|
+| `*.inf` | Yes | The driver INF the dashboard uses for signing |
+| `*.sys` | Yes | The driver binary, signed with your EV cert |
+| `*.cat` | **Yes** | Catalog signed with your EV cert. Microsoft regenerates and re-signs it during processing — yours is for company verification only. **Omitting this causes "Unable to extract and upload PackageInfo.xml."** |
+| `*.pdb` | Yes | Symbol file required by Microsoft's automated crash analysis |
+| Files referenced by INF (e.g. `*.ico`) | Yes | Anything declared in `[SourceDisksFiles]` must be in the CAB |
+
+> **Don't include unreferenced files.** Partner Center now warns about (and may eventually reject) files in the CAB that aren't either `.pdb` or referenced by the INF. The yellow "Driver signing changes coming" banner refers to this enforcement.
+
+### 5.2 `partner_center.ddf` (canonical version)
+
+```ddf
 .OPTION EXPLICIT
+.Set CabinetFileCountThreshold=0
+.Set FolderFileCountThreshold=0
+.Set FolderSizeThreshold=0
+.Set MaxCabinetSize=0
+.Set MaxDiskFileCount=0
+.Set MaxDiskSize=0
 .Set CompressionType=MSZIP
 .Set Cabinet=on
 .Set Compress=on
@@ -176,24 +200,88 @@ For WHQL/Attestation signing, Microsoft requires the PDB file.
 .Set DestinationDir=VirtualAudioDriver
 D:\Datics\Virtual-Audio-Driver\x64\Release\VirtualAudioDriver.inf
 D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.sys
+D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.cat
 D:\Datics\Virtual-Audio-Driver\x64\Release\virtualaudiodriver.pdb
+D:\Datics\Virtual-Audio-Driver\x64\Release\CallJoyna.ico
 ```
 
-### 5.2 Build and Sign Partner Center CAB
+The `*Threshold` and `Max*` settings disable splitting so the whole submission is one CAB.
+
+### 5.3 Build sequence — order matters
+
+The `.cat` file contains the Authenticode hash of the *unsigned* `.sys`. You must regenerate the catalog whenever the INF or any file referenced by the INF changes, and re-sign both `.sys` and `.cat` afterwards.
 
 ```cmd
-makecab /F partner_center.ddf
+:: 1. Build (Step 1) — produces unsigned .sys
+:: 2. Stage the source-of-truth INF + ICO into x64\Release (msbuild does NOT copy these — Rebuild deletes them):
+copy /Y DriverPackage\VirtualAudioDriver.inf x64\Release\
+copy /Y DriverPackage\CallJoyna.ico        x64\Release\
 ```
 
 ```powershell
-# Sign the CAB itself
+# 3. Generate catalog (Step 2)
+& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\inf2cat.exe" `
+    /driver:"D:\Datics\Virtual-Audio-Driver\x64\Release" /os:10_X64 /uselocaltime
+
+# 4. Sign .sys and .cat with EV cert (Step 3)
+.\sign_and_verify.bat
+
+# 5. Build CAB
+Set-Location "D:\Datics\Virtual-Audio-Driver"
+if (Test-Path ".\disk1") { Remove-Item .\disk1 -Recurse -Force }
+makecab /F .\partner_center.ddf
+
+# 6. Sign the CAB itself
 & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" sign `
-    /tr http://timestamp.digicert.com `
-    /td SHA256 `
-    /fd SHA256 `
+    /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 `
     /sha1 a2d7275bae5b04324d5d844fc4eb6bd5759d5f7b `
-    "disk1\VirtualAudioDriver_PartnerCenter.cab"
+    .\disk1\VirtualAudioDriver_PartnerCenter.cab
+
+# 7. Verify CAB signature
+& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" verify /pa /v `
+    .\disk1\VirtualAudioDriver_PartnerCenter.cab
+# Expect: "Successfully verified"
+
+# 8. Copy to project root for upload convenience
+Copy-Item .\disk1\VirtualAudioDriver_PartnerCenter.cab .\VirtualAudioDriver_PartnerCenter.cab -Force
 ```
+
+### 5.4 Pre-upload audit checklist
+
+Before clicking *Submit new hardware*, run this audit and confirm every line:
+
+```powershell
+$cab = ".\VirtualAudioDriver_PartnerCenter.cab"
+$tmp = ".\cab_audit"; Remove-Item $tmp -Recurse -Force -EA SilentlyContinue; New-Item -ItemType Directory $tmp | Out-Null
+expand.exe -F:* $cab $tmp | Out-Null
+
+# 1. All five files present
+Get-ChildItem "$tmp\VirtualAudioDriver" | Format-Table Name, Length
+
+# 2. INF version + OS decoration match what you intend
+Select-String "$tmp\VirtualAudioDriver\VirtualAudioDriver.inf" -Pattern "DriverVer|NTamd64"
+
+# 3. .sys signature chain ends at your EV identity
+& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" verify /pa /v "$tmp\VirtualAudioDriver\virtualaudiodriver.sys"
+
+# 4. .cat signature chain ends at your EV identity
+& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" verify /pa /v "$tmp\VirtualAudioDriver\virtualaudiodriver.cat"
+
+# 5. CAB itself signature
+& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" verify /pa /v $cab
+
+Remove-Item $tmp -Recurse -Force
+```
+
+### 5.5 Common errors and fixes
+
+| Error in Partner Center UI | Cause | Fix |
+|---|---|---|
+| `Unable to extract and upload PackageInfo.xml.` | Missing `.cat`, files at CAB root, or unsupported compression | Use the DDF in 5.2 verbatim; verify with audit in 5.4 |
+| `There are files at the root of the cabinet.` | DDF has no `.Set DestinationDir=...` | Keep `DestinationDir=VirtualAudioDriver` line |
+| `No .inf files found in driver directory/directories: XYZ.` | INF in wrong subfolder, or INF parse error | Run `InfVerif.exe /v <inf>` locally first |
+| `File is using Zip64(4gb+file Size)` | CAB built as zip64 instead of MSZIP | Confirm `CompressionType=MSZIP` in DDF |
+| Submission stays in *Package Acceptance* with red X | Same as PackageInfo.xml error above (most common) | See first row |
 
 ---
 
@@ -220,8 +308,10 @@ Attestation signing gets your driver signed by Microsoft, making it fully truste
 **Leave UNCHECKED:**
 - ❌ "Perform test-signing" checkbox
 
-**SELECT these x64 Windows versions:**
-- ✅ Windows 10 Client version 1607 x64 (RS1)
+**SELECT all x64 Windows versions covered by your INF's `NTamd64.10.0...<build>` decoration.** With the canonical `NTamd64.10.0...17763` (Win10 1809+) decoration, that is:
+
+- ✅ Windows 10 Client version 1809 Client x64 (RS5)
+- ✅ Windows 10 19H1 Client x64
 - ✅ Windows 10 Client version 2004 x64 (Vb)
 - ✅ Windows - Client, version 21H2 x64 (Co)
 - ✅ Windows 11 Client, version 22H2 x64 (Ni)
@@ -230,8 +320,11 @@ Attestation signing gets your driver signed by Microsoft, making it fully truste
 - ✅ Windows 11 Client, version 26H1 x64
 
 **Do NOT select:**
+- ❌ Any pre-RS5 entries (RS1/RS2/RS3/RS4/TH2) — these are below build 17763 and the INF won't match
 - ❌ Any ARM64 versions (driver is x64 only)
 - ❌ Any 32-bit versions
+
+> **OS decoration vs OS targets must agree.** If the INF says `NTamd64.10.0...17763` and you tick Windows 10 1607 (build 14393), Microsoft signs for an OS the driver refuses to install on. To support older Win10 builds, lower the decoration in the INF first (e.g. `NTamd64.10.0...14393` for RS1+), then re-cab and re-submit.
 
 > **Note:** The UI says "Leave all checkboxes blank for Attestation Signing" but this only refers to test-signing. You MUST select at least one OS version.
 
@@ -240,6 +333,8 @@ Attestation signing gets your driver signed by Microsoft, making it fully truste
 1. Click **Submit**
 2. Wait for processing (typically 5-30 minutes)
 3. Monitor progress through: Package Acceptance → Preparation → Scanning → Validation → Catalog creation → Sign → Finalize
+
+> **Updating an existing attestation-signed driver:** the [Driver Update Acceptable (DUA) flow is *not* available for attestation submissions](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/hardware-submission-update). To ship a new version, click **Submit new hardware** again — it creates a sibling submission under a new Private Product ID. Both submissions stay visible in the Drivers list; ship only the latest. Always bump `DriverVer` in the INF before each new submission, otherwise PnP rejects the install with "best driver already installed."
 
 ### 6.5 Download Signed Driver
 
