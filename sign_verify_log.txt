@@ -1,0 +1,26 @@
+Signing and verifying 
+ 
+Signing .cat... 
+Done Adding Additional Store
+Successfully signed: virtualaudiodriver.cat
+Exit code .cat sign: 0 
+Signing .sys... 
+Done Adding Additional Store
+Successfully signed: virtualaudiodriver.sys
+Exit code .sys sign: 0 
+Verifying .cat... 
+File: virtualaudiodriver.cat
+Index  Algorithm  Timestamp    
+========================================
+0      sha256     RFC3161      
+
+Successfully verified: virtualaudiodriver.cat
+Exit code .cat verify: 0 
+Verifying .sys... 
+File: virtualaudiodriver.sys
+Index  Algorithm  Timestamp    
+========================================
+0      sha256     RFC3161      
+
+Successfully verified: virtualaudiodriver.sys
+Exit code .sys verify: 0 

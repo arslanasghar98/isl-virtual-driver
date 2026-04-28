@@ -3,7 +3,7 @@ Signature   = "$Windows NT$"
 Class       = MEDIA
 Provider    = %ProviderName%
 ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-DriverVer = 04/16/2026,1.0.0.16
+DriverVer = 04/27/2026,1.0.0.21
 CatalogFile = VirtualAudioDriver.cat
 PnpLockDown = 1
 
@@ -12,6 +12,7 @@ PnpLockDown = 1
 
 [SourceDisksFiles]
 virtualaudiodriver.sys=222
+CallJoyna.ico=222
 
 [SignatureAttributes]
 virtualaudiodriver.sys=SignatureAttributes.DRM
@@ -30,12 +31,16 @@ PETrust=true
 
 [DestinationDirs]
 VIRTUALAUDIODRIVER_SA.CopyList=12 ; 12=System32\drivers (reliable across all machines)
+VIRTUALAUDIODRIVER_SA.IconCopyList=12 ; Icon goes with driver
 
 ;======================================================
 ; VIRTUALAUDIODRIVER_SA
 ;======================================================
 [VIRTUALAUDIODRIVER_SA.CopyList]
 virtualaudiodriver.sys
+
+[VIRTUALAUDIODRIVER_SA.IconCopyList]
+CallJoyna.ico
 
 [VIRTUALAUDIODRIVER_SA.AddReg]
 HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
@@ -83,6 +88,12 @@ HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.TopologyMicArray1.szPname%
 
 HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+; Set form factor to Microphone (4) for proper microphone icon in Sound settings
+HKR,EP\0,%PKEY_AudioEndpoint_FormFactor%,0x00010001,0x00000004
+; Custom icon for this endpoint in mmsys.cpl / Settings > Sound
+HKR,EP\0,%PKEY_AudioEndpoint_IconPath%,0x00020000,"%%SystemRoot%%\System32\drivers\CallJoyna.ico"
+; Custom icon for Device Manager > Audio inputs and outputs (this is the PKEY VB-Audio uses)
+HKR,EP\0,%DEVPKEY_DeviceClass_IconPath%,0x00020000,"%%SystemRoot%%\System32\drivers\CallJoyna.ico"
 
 ; The following lines opt-in to pull mode.
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
@@ -111,6 +122,10 @@ HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.TopologySpeaker.szPname%
 
 HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+; Custom icon for this endpoint in mmsys.cpl / Settings > Sound
+HKR,EP\0,%PKEY_AudioEndpoint_IconPath%,0x00020000,"%%SystemRoot%%\System32\drivers\CallJoyna.ico"
+; Custom icon for Device Manager > Audio inputs and outputs (this is the PKEY VB-Audio uses)
+HKR,EP\0,%DEVPKEY_DeviceClass_IconPath%,0x00020000,"%%SystemRoot%%\System32\drivers\CallJoyna.ico"
 
 ; The following lines opt-in to pull mode.
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
@@ -127,7 +142,7 @@ HKR,EP\0,%PKEY_AudioEndpoint_DisableExclusiveMode%,0x00010001,0x00000001
 [VIRTUALAUDIODRIVER_SA.NT]
 Include=ks.inf,wdmaudio.inf
 Needs=KS.Registration, WDMAUDIO.Registration
-CopyFiles=VIRTUALAUDIODRIVER_SA.CopyList
+CopyFiles=VIRTUALAUDIODRIVER_SA.CopyList,VIRTUALAUDIODRIVER_SA.IconCopyList
 AddReg=VIRTUALAUDIODRIVER_SA.AddReg
 
 [VIRTUALAUDIODRIVER_SA.NT.Interfaces]
@@ -200,6 +215,9 @@ KSCATEGORY_TOPOLOGY = "{DDA54A40-1E4C-11D1-A050-405705C10000}"
 KSNODETYPE_ANY     = "{00000000-0000-0000-0000-000000000000}"
 
 PKEY_AudioEndpoint_Association                             = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
+PKEY_AudioEndpoint_FormFactor                              = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},0"
+PKEY_AudioEndpoint_IconPath                                = "{F1AB780D-2010-4ED3-A3A6-8B87F0F0C476},0"
+DEVPKEY_DeviceClass_IconPath                               = "{259ABFFC-50A7-47CE-AF08-68C9A7D73366},12"
 PKEY_AudioEndpoint_Supports_EventDriven_Mode = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
 PKEY_AudioDevice_NeverSetAsDefaultEndpoint   = "{F3E80BEF-1723-4FF2-BCC4-7F83DC5E46D4},3"
 PKEY_AudioEndpoint_DisableExclusiveMode      = "{b3f8fa53-0004-438e-9003-51a46e139bfc},3"
