@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Read(//c/Program Files \\(x86\\)/Windows Kits/10/**)",
-      "Read(//e/Downloads/Signed_1152921505700928743//**)"
+      "Read(//e/Downloads/Signed_1152921505700928743//**)",
+      "PowerShell(Start-Process powershell -Verb RunAs -ArgumentList @\\(\"-NoProfile\",\"-ExecutionPolicy\",\"Bypass\",\"-File\",\"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\Force-AudioRescan.ps1\"\\); Write-Output \"Launched. Click Yes on UAC.\")"
     ]
   }
 }

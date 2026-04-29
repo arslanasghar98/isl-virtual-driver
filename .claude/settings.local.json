@@ -33,7 +33,9 @@
       "Bash(cmd //c:*)",
       "Bash(pnputil:*)",
       "Bash(./build.bat:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "mcp__clickup__list_spaces",
+      "mcp__clickup__list_folders"
     ]
   }
 }
