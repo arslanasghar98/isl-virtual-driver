@@ -3,7 +3,20 @@
     "allow": [
       "Read(//c/Program Files \\(x86\\)/Windows Kits/10/**)",
       "Read(//e/Downloads/Signed_1152921505700928743//**)",
-      "PowerShell(Start-Process powershell -Verb RunAs -ArgumentList @\\(\"-NoProfile\",\"-ExecutionPolicy\",\"Bypass\",\"-File\",\"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\Force-AudioRescan.ps1\"\\); Write-Output \"Launched. Click Yes on UAC.\")"
+      "PowerShell(Start-Process powershell -Verb RunAs -ArgumentList @\\(\"-NoProfile\",\"-ExecutionPolicy\",\"Bypass\",\"-File\",\"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\Force-AudioRescan.ps1\"\\); Write-Output \"Launched. Click Yes on UAC.\")",
+      "Read(//d/Datics/virtual-mic-isl/build/**)",
+      "Read(//e/Downloads/_micloss/**)",
+      "Read(//d/Datics/virtual-mic-isl/**)",
+      "Read(//c/Users/Datics/OneDrive/Desktop/CallJoyna-MicLoss-Watch-DESKTOP-R8QHVL0/20260430-201928/**)",
+      "PowerShell(& \"C:\\\\Program Files \\(x86\\)\\\\Windows Kits\\\\10\\\\Tools\\\\10.0.26100.0\\\\x64\\\\infverif.exe\" /v \"D:\\\\Datics\\\\Virtual-Audio-Driver\\\\DriverPackage\\\\VirtualAudioDriver.inf\" 2>&1)",
+      "Bash(mkdir -p \"/d/Datics/virtual-mic-isl/_backup_v24_pre_v25\")",
+      "Bash(cp \"/d/Datics/virtual-mic-isl/build/driver/VirtualAudioDriver.inf\" \"/d/Datics/virtual-mic-isl/build/driver/virtualaudiodriver.sys\" \"/d/Datics/virtual-mic-isl/build/driver/virtualaudiodriver.cat\" \"/d/Datics/virtual-mic-isl/build/driver/CallJoyna.ico\" \"/d/Datics/virtual-mic-isl/_backup_v24_pre_v25/\")",
+      "Bash(cp \"/d/Datics/virtual-mic-isl/resources/VirtualAudioDriver.cab\" \"/d/Datics/virtual-mic-isl/_backup_v24_pre_v25/VirtualAudioDriver.cab\")",
+      "Bash(cp \"/d/Datics/virtual-mic-isl/VirtualAudioDriver_PartnerCenter.cab\" \"/d/Datics/virtual-mic-isl/_backup_v24_pre_v25/VirtualAudioDriver_PartnerCenter_v24.cab\")",
+      "Bash(cp /e/Downloads/Signed_1152921505700944338/drivers/VirtualAudioDriver/VirtualAudioDriver.inf /d/Datics/virtual-mic-isl/build/driver/)",
+      "Bash(cp /e/Downloads/Signed_1152921505700944338/drivers/VirtualAudioDriver/virtualaudiodriver.sys /d/Datics/virtual-mic-isl/build/driver/)",
+      "Bash(cp /e/Downloads/Signed_1152921505700944338/drivers/VirtualAudioDriver/virtualaudiodriver.cat /d/Datics/virtual-mic-isl/build/driver/)",
+      "Bash(cp /e/Downloads/Signed_1152921505700944338/drivers/VirtualAudioDriver/CallJoyna.ico /d/Datics/virtual-mic-isl/build/driver/)"
     ]
   }
 }

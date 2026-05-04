@@ -3,7 +3,7 @@ Signature   = "$Windows NT$"
 Class       = MEDIA
 Provider    = %ProviderName%
 ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-DriverVer = 04/28/2026,1.0.0.22
+DriverVer = 04/30/2026,1.0.0.25
 CatalogFile = VirtualAudioDriver.cat
 PnpLockDown = 1
 
@@ -88,8 +88,10 @@ HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.TopologyMicArray1.szPname%
 
 HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
-; Set form factor to Microphone (4) for proper microphone icon in Sound settings
-HKR,EP\0,%PKEY_AudioEndpoint_FormFactor%,0x00010001,0x00000004
+; FormFactor intentionally omitted -- v23 (Microphone) and v24 (UnknownFormFactor)
+; both caused AudioEndpointBuilder to delete this virtual capture endpoint when a
+; physical mic was plugged in. v16 had no FormFactor HKR and survived.
+
 ; Custom icon for this endpoint in mmsys.cpl / Settings > Sound
 HKR,EP\0,%PKEY_AudioEndpoint_IconPath%,0x00020000,"%%SystemRoot%%\System32\drivers\CallJoyna.ico"
 ; Custom icon for Device Manager > Audio inputs and outputs (this is the PKEY VB-Audio uses)
@@ -122,6 +124,7 @@ HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.TopologySpeaker.szPname%
 
 HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+
 ; Custom icon for this endpoint in mmsys.cpl / Settings > Sound
 HKR,EP\0,%PKEY_AudioEndpoint_IconPath%,0x00020000,"%%SystemRoot%%\System32\drivers\CallJoyna.ico"
 ; Custom icon for Device Manager > Audio inputs and outputs (this is the PKEY VB-Audio uses)
@@ -215,7 +218,6 @@ KSCATEGORY_TOPOLOGY = "{DDA54A40-1E4C-11D1-A050-405705C10000}"
 KSNODETYPE_ANY     = "{00000000-0000-0000-0000-000000000000}"
 
 PKEY_AudioEndpoint_Association                             = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
-PKEY_AudioEndpoint_FormFactor                              = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},0"
 PKEY_AudioEndpoint_IconPath                                = "{F1AB780D-2010-4ED3-A3A6-8B87F0F0C476},0"
 DEVPKEY_DeviceClass_IconPath                               = "{259ABFFC-50A7-47CE-AF08-68C9A7D73366},12"
 PKEY_AudioEndpoint_Supports_EventDriven_Mode = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
