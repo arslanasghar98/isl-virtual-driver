@@ -61,7 +61,7 @@ PCPIN_DESCRIPTOR MicArray1TopoMiniportPins[] =
         MicArray1TopoPinDataRangePointersBridge,                   // DataRanges
         KSPIN_DATAFLOW_IN,                            // DataFlow
         KSPIN_COMMUNICATION_NONE,                     // Communication
-        &KSNODETYPE_LINE_CONNECTOR,                   // Category - Line type (not auto-set as communications device)
+        &KSNODETYPE_MICROPHONE,                       // Category - Microphone type for proper endpoint naming
         &MICARRAY1_CUSTOM_NAME,                       // Name
         0                                             // Reserved
       }

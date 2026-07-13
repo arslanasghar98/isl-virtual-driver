@@ -1,0 +1,74 @@
+[Version]
+Signature   = "$Windows NT$"
+Class       = MEDIA
+Provider    = %ProviderName%
+ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
+DriverVer   = 07/09/2026,2.0.0.1
+CatalogFile = VirtualAudioDriver.cat
+PnpLockDown = 1
+
+[SourceDisksNames]
+222="VIRTUALAUDIODRIVER Driver Disk","",222
+
+[SourceDisksFiles]
+virtualaudiodriver.sys=222
+
+[Manufacturer]
+%MfgName%=VIRTUALAUDIODRIVER,NTamd64.10.0...22000,NTARM64.10.0...22000
+
+[VIRTUALAUDIODRIVER.NTamd64.10.0...22000]
+%VIRTUALAUDIODRIVER_SA.DeviceDesc%=VIRTUALAUDIODRIVER_SA, ROOT\VirtualAudioDriver
+
+[VIRTUALAUDIODRIVER.NTARM64.10.0...22000]
+%VIRTUALAUDIODRIVER_SA.DeviceDesc%=VIRTUALAUDIODRIVER_SA, ROOT\VirtualAudioDriver
+
+[DestinationDirs]
+VIRTUALAUDIODRIVER_SA.CopyList=12
+
+[VIRTUALAUDIODRIVER_SA.CopyList]
+virtualaudiodriver.sys
+
+[VIRTUALAUDIODRIVER_SA.AddReg]
+HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
+HKR,,Driver,,virtualaudiodriver.sys
+HKR,Drivers,SubClasses,,"wave,midi,mixer"
+HKR,Drivers\wave\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\midi\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\mixer\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\wave\wdmaud.drv,Description,,"CallJoyna Audio"
+HKR,Drivers\mixer\wdmaud.drv,Description,,"CallJoyna Audio"
+
+[VIRTUALAUDIODRIVER_SA.NT]
+Include=ks.inf,wdmaudio.inf
+Needs=KS.Registration, WDMAUDIO.Registration
+CopyFiles=VIRTUALAUDIODRIVER_SA.CopyList
+AddReg=VIRTUALAUDIODRIVER_SA.AddReg
+
+[VIRTUALAUDIODRIVER_SA.NT.Services]
+AddService=VirtualAudioDriver,0x00000002,VirtualAudioDriver_Service_Inst
+
+[VirtualAudioDriver_Service_Inst]
+DisplayName=%VirtualAudioDriver.SvcDesc%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%12%\virtualaudiodriver.sys
+
+[VIRTUALAUDIODRIVER_SA.NT.HW]
+AddReg = AUDIOHW.AddReg
+
+[AUDIOHW.AddReg]
+HKR,,DeviceType,0x10001,0x0000001D
+HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGWGX;;;RC)"
+
+[VIRTUALAUDIODRIVER_SA.NT.Wdf]
+KmdfService = VirtualAudioDriver, VIRTUALAUDIODRIVER_SA_WdfSect
+
+[VIRTUALAUDIODRIVER_SA_WdfSect]
+KmdfLibraryVersion = 1.33
+
+[Strings]
+ProviderName = "CallJoyna"
+MfgName       = "CallJoyna"
+VIRTUALAUDIODRIVER_SA.DeviceDesc="CallJoyna Audio"
+VirtualAudioDriver.SvcDesc="CallJoyna Audio Service"

@@ -86,7 +86,7 @@ echo Windows SDK: %TARGET_SDK%
 echo.
 
 if /i "%PLATFORM%"=="ARM64" (
-    echo Building ARM64 with validation disabled...
+    echo Building ARM64...
     "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
         /p:Configuration=%CONFIG% ^
         /p:Platform=ARM64 ^
@@ -94,15 +94,8 @@ if /i "%PLATFORM%"=="ARM64" (
         /p:VisualStudioVersion=17.0 ^
         /p:RunCodeAnalysis=false ^
         /p:DriverTargetPlatform=Universal ^
-        /p:UseInfVerifierEx=false ^
-        /p:ValidateDrivers=false ^
-        /p:StampInf=false ^
         /p:ApiValidator_Enable=false ^
-        /p:InfVerif_Enable=false ^
-        /p:DisableVerification=true ^
-        /p:SignMode=Off ^
-        /p:ApiValidator_ExcludedTargets=ARM64 ^
-        /p:EnableInf2cat=false
+        /p:ApiValidator_ExcludedTargets=ARM64
 ) else (
     echo Building x64 with full validation...
     "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
@@ -145,15 +138,8 @@ for %%c in (%CONFIGS%) do (
                 /p:VisualStudioVersion=17.0 ^
                 /p:RunCodeAnalysis=false ^
                 /p:DriverTargetPlatform=Universal ^
-                /p:UseInfVerifierEx=false ^
-                /p:ValidateDrivers=false ^
-                /p:StampInf=false ^
                 /p:ApiValidator_Enable=false ^
-                /p:InfVerif_Enable=false ^
-                /p:DisableVerification=true ^
-                /p:SignMode=Off ^
-                /p:ApiValidator_ExcludedTargets=ARM64 ^
-                /p:EnableInf2cat=false
+                /p:ApiValidator_ExcludedTargets=ARM64
         ) else (
             "%MSBUILD_CMD%" "VirtualAudioDriver.sln" ^
                 /p:Configuration=%%c ^

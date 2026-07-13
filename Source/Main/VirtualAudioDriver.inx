@@ -3,15 +3,30 @@ Signature   = "$Windows NT$"
 Class       = MEDIA
 Provider    = %ProviderName%
 ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-DriverVer   = 02/23/2026, 1.0.0.14
+DriverVer   = 07/09/2026, 2.0.6.0
 CatalogFile = VirtualAudioDriver.cat
 PnpLockDown = 1
 
 [SourceDisksNames]
 222="VIRTUALAUDIODRIVER Driver Disk","",222
 
+[SourceDisksNames.amd64]
+222="VIRTUALAUDIODRIVER Driver Disk","",222
+
+[SourceDisksNames.ARM64]
+222="VIRTUALAUDIODRIVER Driver Disk","",222
+
 [SourceDisksFiles]
 virtualaudiodriver.sys=222
+CallJoyna.ico=222
+
+[SourceDisksFiles.amd64]
+virtualaudiodriver.sys=222
+CallJoyna.ico=222
+
+[SourceDisksFiles.ARM64]
+virtualaudiodriver.sys=222
+CallJoyna.ico=222
 
 [SignatureAttributes]
 virtualaudiodriver.sys=SignatureAttributes.DRM
@@ -23,19 +38,26 @@ DRMLevel=1300
 PETrust=true
 
 [Manufacturer]
-%MfgName%=VIRTUALAUDIODRIVER,NTamd64.10.0...22000
+%MfgName%=VIRTUALAUDIODRIVER,NTamd64.10.0...22000,NTARM64.10.0...22000
 
 [VIRTUALAUDIODRIVER.NTamd64.10.0...22000]
 %VIRTUALAUDIODRIVER_SA.DeviceDesc%=VIRTUALAUDIODRIVER_SA, ROOT\VirtualAudioDriver
 
+[VIRTUALAUDIODRIVER.NTARM64.10.0...22000]
+%VIRTUALAUDIODRIVER_SA.DeviceDesc%=VIRTUALAUDIODRIVER_SA, ROOT\VirtualAudioDriver
+
 [DestinationDirs]
-VIRTUALAUDIODRIVER_SA.CopyList=12 ; 12=System32\drivers (reliable across all machines)
+VIRTUALAUDIODRIVER_SA.CopyList=12 ; 12=System32\drivers
+VIRTUALAUDIODRIVER_SA.IconCopyList=13 ; 13=Driver Store (for icon file)
 
 ;======================================================
 ; VIRTUALAUDIODRIVER_SA
 ;======================================================
 [VIRTUALAUDIODRIVER_SA.CopyList]
 virtualaudiodriver.sys
+
+[VIRTUALAUDIODRIVER_SA.IconCopyList]
+CallJoyna.ico
 
 [VIRTUALAUDIODRIVER_SA.AddReg]
 HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
@@ -127,8 +149,12 @@ HKR,EP\0,%PKEY_AudioEndpoint_DisableExclusiveMode%,0x00010001,0x00000001
 [VIRTUALAUDIODRIVER_SA.NT]
 Include=ks.inf,wdmaudio.inf
 Needs=KS.Registration, WDMAUDIO.Registration
-CopyFiles=VIRTUALAUDIODRIVER_SA.CopyList
+CopyFiles=VIRTUALAUDIODRIVER_SA.CopyList,VIRTUALAUDIODRIVER_SA.IconCopyList
 AddReg=VIRTUALAUDIODRIVER_SA.AddReg
+AddProperty=DeviceIconProperty
+
+[DeviceIconProperty]
+DeviceIcon,,,,"%13%\CallJoyna.ico"
 
 [VIRTUALAUDIODRIVER_SA.NT.Interfaces]
 ;

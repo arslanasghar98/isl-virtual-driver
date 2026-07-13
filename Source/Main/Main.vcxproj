@@ -65,6 +65,14 @@
     <ConfigurationType>Driver</ConfigurationType>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
   </ImportGroup>
@@ -251,7 +259,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <Link>
-      <AdditionalDependencies>$(DDK_LIB_PATH)\ntoskrnl.lib;$(DDK_LIB_PATH)\hal.lib;$(DDK_LIB_PATH)\wdmsec.lib;$(DDK_LIB_PATH)\BufferOverflowK.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfLdr.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfDriverEntry.lib;$(SDK_LIB_PATH)\libcpmt.lib;$(SDK_LIB_PATH)\libvcruntime.lib;%(AdditionalDependencies);.\..\Utilities\$(IntDir)\Utilities.lib;.\..\Filters\$(IntDir)\Filters.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(DDK_LIB_PATH)\ntoskrnl.lib;$(DDK_LIB_PATH)\hal.lib;$(DDK_LIB_PATH)\wdmsec.lib;$(DDK_LIB_PATH)\bufferoverflowfastfailk.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfLdr.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfDriverEntry.lib;$(SDK_LIB_PATH)\libcpmt.lib;$(SDK_LIB_PATH)\libvcruntime.lib;%(AdditionalDependencies);.\..\Utilities\$(IntDir)\Utilities.lib;.\..\Filters\$(IntDir)\Filters.lib</AdditionalDependencies>
       <Driver>Driver</Driver>
       <SubSystem>Native</SubSystem>
       <EntryPointSymbol>DriverEntry</EntryPointSymbol>
@@ -315,7 +323,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <Link>
-      <AdditionalDependencies>$(DDK_LIB_PATH)\ntoskrnl.lib;$(DDK_LIB_PATH)\hal.lib;$(DDK_LIB_PATH)\wdmsec.lib;$(DDK_LIB_PATH)\BufferOverflowK.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfLdr.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfDriverEntry.lib;$(SDK_LIB_PATH)\libcpmt.lib;$(SDK_LIB_PATH)\libvcruntime.lib;%(AdditionalDependencies);.\..\Utilities\$(IntDir)\Utilities.lib;.\..\Filters\$(IntDir)\Filters.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(DDK_LIB_PATH)\ntoskrnl.lib;$(DDK_LIB_PATH)\hal.lib;$(DDK_LIB_PATH)\wdmsec.lib;$(DDK_LIB_PATH)\bufferoverflowfastfailk.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfLdr.lib;$(WDKContentRoot)Lib\wdf\kmdf\$(Platform)\$(KMDF_VERSION_MAJOR).$(KMDF_VERSION_MINOR)\WdfDriverEntry.lib;$(SDK_LIB_PATH)\libcpmt.lib;$(SDK_LIB_PATH)\libvcruntime.lib;%(AdditionalDependencies);.\..\Utilities\$(IntDir)\Utilities.lib;.\..\Filters\$(IntDir)\Filters.lib</AdditionalDependencies>
       <Driver>Driver</Driver>
       <SubSystem>Native</SubSystem>
       <EntryPointSymbol>DriverEntry</EntryPointSymbol>

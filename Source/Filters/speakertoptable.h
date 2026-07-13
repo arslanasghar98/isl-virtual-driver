@@ -82,7 +82,7 @@ PCPIN_DESCRIPTOR SpeakerTopoMiniportPins[] =
       SpeakerTopoPinDataRangePointersBridge,            // DataRanges
       KSPIN_DATAFLOW_OUT,                               // DataFlow
       KSPIN_COMMUNICATION_NONE,                         // Communication
-      &KSNODETYPE_LINE_CONNECTOR,                       // Category - Line type (not auto-set as communications device)
+      &KSNODETYPE_SPEAKER,                              // Category - Speaker type for proper endpoint naming
       &SPEAKER_CUSTOM_NAME,                             // Name - Custom "ISL Speaker" name
       0                                                 // Reserved
     }

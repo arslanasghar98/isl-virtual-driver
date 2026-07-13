@@ -82,7 +82,7 @@ if (Test-Path $catFile) {
 
 & $inf2cat `
     /driver:"$driverPath" `
-    /os:10_X64 `
+    /os:10_X64,10_ARM64 `
     /uselocaltime
 
 if (-not (Test-Path $catFile)) {
