@@ -1,0 +1,61 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715140026
+Username: DESKTOP-R8QHVL0\Datics
+RunAs User: DESKTOP-R8QHVL0\Datics
+Configuration Name: 
+Machine: DESKTOP-R8QHVL0 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\PROGRA~1\KMSpico\temp\claude\d--Datics-virtual-mic-isl\02f3b941-246d-4b43-bc19-8fff2f7b329e\scratchpad\TestFlat.ps1
+Process ID: 3036
+PSVersion: 5.1.26100.8875
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8875
+BuildVersion: 10.0.26100.8875
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+===== FLAT PACKAGE TEST (sys at root, amd64 only) =====
+  flat INF SourceDisks:
+    [SourceDisksNames]
+    2 = %DiskName%
+    [SourceDisksNames.amd64]
+    1 = %DiskName%
+    [SourceDisksFiles]
+    [SourceDisksFiles.amd64]
+    virtualaudiodriver.sys = 1
+    [Manufacturer]
+
+[1] Remove old device + driver...
+
+[2] Sign flat package...
+  signed
+
+[3] Install flat package...
+Device node created. Install is complete when drivers are installed...
+Updating drivers for ROOT\VirtualAudioDriver from D:\Datics\Virtual-Audio-Driver\_FlatTest\VirtualAudioDriver.inf.
+Drivers installed successfully.
+
+[4] driver store layout now:
+  PKG: virtualaudiodriver.inf_amd64_035c2524d358945b
+     \virtualaudiodriver.inf_amd64_035c2524d358945b\CallJoyna.ico
+     \virtualaudiodriver.inf_amd64_035c2524d358945b\VirtualAudioDriver.cat
+     \virtualaudiodriver.inf_amd64_035c2524d358945b\virtualaudiodriver.inf
+     \virtualaudiodriver.inf_amd64_035c2524d358945b\virtualaudiodriver.sys
+
+[5] Purge endpoints as SYSTEM...
+
+=========== RESULT ===========
+
+>>> [Capture] CallJoyna Mic (CallJoyna Audio)
+      NAME = 'CallJoyna Mic'
+      ICON = '%windir%\system32\mmres.dll,-3014'   <<< want ...virtualaudiodriver.sys,-100/-101
+
+>>> [Render] CallJoyna Speaker (CallJoyna Audio)
+      NAME = 'CallJoyna Speaker'
+      ICON = '%windir%\system32\mmres.dll,-3012'   <<< want ...virtualaudiodriver.sys,-100/-101
+**********************
+Windows PowerShell transcript end
+End time: 20260715140105
+**********************

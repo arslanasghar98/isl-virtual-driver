@@ -1,0 +1,69 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715130803
+Username: DESKTOP-R8QHVL0\Datics
+RunAs User: DESKTOP-R8QHVL0\Datics
+Configuration Name: 
+Machine: DESKTOP-R8QHVL0 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\PROGRA~1\KMSpico\temp\claude\d--Datics-virtual-mic-isl\02f3b941-246d-4b43-bc19-8fff2f7b329e\scratchpad\TestFix.ps1
+Process ID: 4420
+PSVersion: 5.1.26100.8875
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8875
+BuildVersion: 10.0.26100.8875
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+===== TEST FIX: latest build (KSNODETYPE_SPEAKER + EP\0 on Wave) =====
+
+[1] Sign package with test cert...
+  signed with 3383CFF7237FD6D5D4F0574CE5E8B47E1A83B2B1
+
+[2] Remove old driver + devices...
+
+[3] Install + create device...
+Microsoft PnP Utility
+
+Adding driver package:  VirtualAudioDriver.inf
+Driver package added successfully.
+Published Name:         oem51.inf
+
+Total driver packages:  1
+Added driver packages:  1
+
+[4] Endpoints created (pre-purge, may be stale):
+   [Capture] CallJoyna Mic (CallJoyna Audio)  {78D92179-9C6B-4086-91F5-380C04E10ED5}
+   [Render] Speakers (CallJoyna Audio)  {86B6DD4C-9541-4CA5-86FC-DC8F0A3C333F}
+
+[5] Purging endpoint cache AS SYSTEM (admin is denied by ACL)...
+     @echo off
+     net stop Audiosrv /y >nul 2>&1
+     net stop AudioEndpointBuilder /y >nul 2>&1
+     reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture\{78D92179-9C6B-4086-91F5-380C04E10ED5}" /f
+     reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\{86B6DD4C-9541-4CA5-86FC-DC8F0A3C333F}" /f
+     net start AudioEndpointBuilder >nul 2>&1
+     net start Audiosrv >nul 2>&1
+     echo done > "D:\Datics\Virtual-Audio-Driver\_purge_done.txt"
+  purge ran: True
+
+===== RESULT (endpoints rebuilt from a genuinely clean cache) =====
+
+[Capture] CallJoyna Mic (CallJoyna Audio)
+    guid  = {78D92179-9C6B-4086-91F5-380C04E10ED5}
+    NAME  = 'CallJoyna Mic'      <-- want 'CallJoyna Speaker'
+    ICON  = '%windir%\system32\mmres.dll,-3014'      <-- want ...virtualaudiodriver.sys,-101
+    assoc = ''     <-- proves EP\0 migrated
+    ff=4  jack={DFF21BE1-F70F-11D0-B917-00A0C9223196}
+
+[Render] Speakers (CallJoyna Audio)
+    guid  = {86B6DD4C-9541-4CA5-86FC-DC8F0A3C333F}
+    NAME  = 'Speakers'      <-- want 'CallJoyna Speaker'
+    ICON  = '%windir%\system32\mmres.dll,-3010'      <-- want ...virtualaudiodriver.sys,-101
+    assoc = ''     <-- proves EP\0 migrated
+    ff=1  jack={DFF21CE1-F70F-11D0-B917-00A0C9223196}
+**********************
+Windows PowerShell transcript end
+End time: 20260715130836
+**********************

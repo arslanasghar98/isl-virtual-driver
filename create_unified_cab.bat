@@ -43,7 +43,7 @@ echo Signature   = "$Windows NT$"
 echo Class       = MEDIA
 echo Provider    = %%ProviderName%%
 echo ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-echo DriverVer   = 07/10/2026,2.0.15.0
+echo DriverVer   = 07/15/2026,2.0.17.0
 echo CatalogFile = VirtualAudioDriver.cat
 echo PnpLockDown = 1
 echo.
@@ -101,8 +101,13 @@ echo.
 echo [VIRTUALAUDIODRIVER.I.TopologyMicArray1.AddReg]
 echo HKR,,CLSID,,%%Proxy.CLSID%%
 echo HKR,,FriendlyName,,%%VIRTUALAUDIODRIVER.TopologyMicArray1.szPname%%
+echo ; EP\0 endpoint properties go on the TOPOLOGY interface.
+echo ; The icon value MUST be REG_SZ with a literal %%windir%% - do NOT use flag 0x00020000
+echo ; ^(REG_EXPAND_SZ^): the pre-expanded path is ignored and the endpoint falls back to
+echo ; the generic mmres.dll icon. Verified against Krisp's shipping INF.
 echo HKR,EP\0,%%PKEY_AudioEndpoint_Association%%,,%%KSNODETYPE_ANY%%
 echo HKR,EP\0,%%PKEY_AudioEndpoint_Supports_EventDriven_Mode%%,0x00010001,0x1
+echo HKR,EP\0,%%PKEY_AudioEndpoint_Icon%%,,"%%%%windir%%%%\system32\drivers\virtualaudiodriver.sys,-101"
 echo.
 echo ;======================================================
 echo ; Render interfaces: speaker
@@ -120,8 +125,12 @@ echo.
 echo [VIRTUALAUDIODRIVER.I.TopologySpeaker.AddReg]
 echo HKR,,CLSID,,%%Proxy.CLSID%%
 echo HKR,,FriendlyName,,%%VIRTUALAUDIODRIVER.TopologySpeaker.szPname%%
+echo ; EP\0 endpoint properties go on the TOPOLOGY interface. Icon = REG_SZ, literal %%windir%%.
+echo ; Icon resource -100 = render, -101 = capture; both are embedded in virtualaudiodriver.sys
+echo ; for x64 and ARM64, so this single path works on both architectures.
 echo HKR,EP\0,%%PKEY_AudioEndpoint_Association%%,,%%KSNODETYPE_ANY%%
 echo HKR,EP\0,%%PKEY_AudioEndpoint_Supports_EventDriven_Mode%%,0x00010001,0x1
+echo HKR,EP\0,%%PKEY_AudioEndpoint_Icon%%,,"%%%%windir%%%%\system32\drivers\virtualaudiodriver.sys,-100"
 echo.
 echo ;======================================================
 echo ; VIRTUALAUDIODRIVER_SA
@@ -205,6 +214,7 @@ echo KSCATEGORY_TOPOLOGY="{DDA54A40-1E4C-11D1-A050-405705C10000}"
 echo KSNODETYPE_ANY="{00000000-0000-0000-0000-000000000000}"
 echo PKEY_AudioEndpoint_Association="{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
 echo PKEY_AudioEndpoint_Supports_EventDriven_Mode="{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
+echo PKEY_AudioEndpoint_Icon="{259ABFFC-50A7-47CE-AF08-68C9A7D73366},12"
 echo ; Custom Name GUIDs for endpoint friendly names
 echo GUID.MicArray1="{6ae81ff4-203e-4fe1-88aa-f2d57775cd4a}"
 echo GUID.Speaker="{7ae81ff4-203e-4fe1-88aa-f2d57775cd4b}"
@@ -246,9 +256,23 @@ cd /d "%BASEDIR%"
 
 (
 echo .OPTION EXPLICIT
-echo .Set CabinetNameTemplate=VirtualAudioDriver_Unified.cab
+echo ;
+echo ; Thresholds/limits MUST all be 0 = unlimited. Without them makecab defaults to
+echo ; MaxDiskSize 1.44MB - floppy size - and SPLITS the package across multiple
+echo ; cabinets, which Partner Center cannot extract and reports as
+echo ; "Unable to extract and upload PackageInfo.xml".
+echo ; Required to keep the single multi-arch amd64 + arm64 cab valid as it grows.
+echo ;
+echo .Set CabinetFileCountThreshold=0
+echo .Set FolderFileCountThreshold=0
+echo .Set FolderSizeThreshold=0
+echo .Set MaxCabinetSize=0
+echo .Set MaxDiskFileCount=0
+echo .Set MaxDiskSize=0
 echo .Set CompressionType=MSZIP
 echo .Set Cabinet=on
+echo .Set Compress=on
+echo .Set CabinetNameTemplate=VirtualAudioDriver_Unified.cab
 echo .Set DiskDirectoryTemplate=.
 echo .Set DestinationDir=VirtualAudioDriver
 echo.

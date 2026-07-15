@@ -3,7 +3,7 @@ Signature   = "$Windows NT$"
 Class       = MEDIA
 Provider    = %ProviderName%
 ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
-DriverVer   = 07/15/2026,2.0.17.0
+DriverVer   = 07/14/2026,2.0.16.0
 CatalogFile = VirtualAudioDriver.cat
 PnpLockDown = 1
 
@@ -11,10 +11,8 @@ PnpLockDown = 1
 2 = %DiskName%
 
 [SourceDisksNames.amd64]
-1 = %DiskName%,,,amd64
+1 = %DiskName%
 
-[SourceDisksNames.arm64]
-1 = %DiskName%,,,arm64
 
 [SourceDisksFiles]
 CallJoyna.ico = 2
@@ -22,11 +20,9 @@ CallJoyna.ico = 2
 [SourceDisksFiles.amd64]
 virtualaudiodriver.sys = 1
 
-[SourceDisksFiles.arm64]
-virtualaudiodriver.sys = 1
 
 [Manufacturer]
-%MfgName% = VIRTUALAUDIODRIVER,NTamd64.10.0...22000,NTARM64.10.0...22000
+%MfgName% = VIRTUALAUDIODRIVER,NTamd64.10.0...22000
 
 [VIRTUALAUDIODRIVER.NTamd64.10.0...22000]
 %VIRTUALAUDIODRIVER_SA.DeviceDesc% = VIRTUALAUDIODRIVER_SA, ROOT\VirtualAudioDriver
@@ -54,6 +50,11 @@ AddReg=VIRTUALAUDIODRIVER.I.WaveMicArray1.AddReg
 [VIRTUALAUDIODRIVER.I.WaveMicArray1.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.WaveMicArray1.szPname%
+; EP\0 endpoint properties MUST live on the WAVE interface. On the Topology
+; interface they are silently ignored and never reach the endpoint store.
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEndpoint_Icon%,0x00020000,"%%SystemRoot%%\System32\drivers\virtualaudiodriver.sys,-101"
 
 [VIRTUALAUDIODRIVER.I.TopologyMicArray1]
 AddReg=VIRTUALAUDIODRIVER.I.TopologyMicArray1.AddReg
@@ -61,13 +62,6 @@ AddReg=VIRTUALAUDIODRIVER.I.TopologyMicArray1.AddReg
 [VIRTUALAUDIODRIVER.I.TopologyMicArray1.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.TopologyMicArray1.szPname%
-; EP\0 endpoint properties go on the TOPOLOGY interface.
-; The icon value MUST be REG_SZ with a literal %windir% - do NOT use flag 0x00020000
-; (REG_EXPAND_SZ): the pre-expanded path is ignored and the endpoint falls back to
-; the generic mmres.dll icon. Verified against Krisp's shipping INF.
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
-HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
-HKR,EP\0,%PKEY_AudioEndpoint_Icon%,,"%%windir%%\system32\drivers\virtualaudiodriver.sys,-101"
 
 ;======================================================
 ; Render interfaces: speaker
@@ -78,6 +72,11 @@ AddReg=VIRTUALAUDIODRIVER.I.WaveSpeaker.AddReg
 [VIRTUALAUDIODRIVER.I.WaveSpeaker.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.WaveSpeaker.szPname%
+; EP\0 endpoint properties MUST live on the WAVE interface. On the Topology
+; interface they are silently ignored and never reach the endpoint store.
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEndpoint_Icon%,0x00020000,"%%SystemRoot%%\System32\drivers\virtualaudiodriver.sys,-101"
 
 [VIRTUALAUDIODRIVER.I.TopologySpeaker]
 AddReg=VIRTUALAUDIODRIVER.I.TopologySpeaker.AddReg
@@ -85,12 +84,6 @@ AddReg=VIRTUALAUDIODRIVER.I.TopologySpeaker.AddReg
 [VIRTUALAUDIODRIVER.I.TopologySpeaker.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%VIRTUALAUDIODRIVER.TopologySpeaker.szPname%
-; EP\0 endpoint properties go on the TOPOLOGY interface. Icon = REG_SZ, literal %windir%.
-; Icon resource -100 = render, -101 = capture; both are embedded in virtualaudiodriver.sys
-; for x64 and ARM64, so this single path works on both architectures.
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
-HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
-HKR,EP\0,%PKEY_AudioEndpoint_Icon%,,"%%windir%%\system32\drivers\virtualaudiodriver.sys,-100"
 
 ;======================================================
 ; VIRTUALAUDIODRIVER_SA
@@ -190,3 +183,4 @@ VIRTUALAUDIODRIVER.WaveSpeaker.szPname = "CallJoyna Speaker"
 VIRTUALAUDIODRIVER.TopologySpeaker.szPname = "CallJoyna Speaker"
 VIRTUALAUDIODRIVER.WaveMicArray1.szPname = "CallJoyna Mic"
 VIRTUALAUDIODRIVER.TopologyMicArray1.szPname = "CallJoyna Mic"
+

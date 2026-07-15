@@ -1,0 +1,65 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715131914
+Username: DESKTOP-R8QHVL0\Datics
+RunAs User: DESKTOP-R8QHVL0\Datics
+Configuration Name: 
+Machine: DESKTOP-R8QHVL0 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\PROGRA~1\KMSpico\temp\claude\d--Datics-virtual-mic-isl\02f3b941-246d-4b43-bc19-8fff2f7b329e\scratchpad\TestRoot.ps1
+Process ID: 5732
+PSVersion: 5.1.26100.8875
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8875
+BuildVersion: 10.0.26100.8875
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+===== TEST: proper ROOT device via devcon =====
+
+[1] Sign package...
+  ok
+
+[2] Remove devgen device + old driver...
+   removing SWD\MMDEVAPI\{0.0.0.00000000}.{3334C928-56C2-4922-B9A8-54A2982BE7AE}
+   removing SWD\MMDEVAPI\{0.0.1.00000000}.{FA240C95-BACE-48D2-8D46-530E7BE4E25D}
+   removing SWD\DEVGEN\ISLAUDIO01
+   removing ROOT\MEDIA\0002
+
+[3] devcon install => creates a real ROOT\MEDIA device node...
+Device node created. Install is complete when drivers are installed...
+Updating drivers for ROOT\VirtualAudioDriver from D:\Datics\Virtual-Audio-Driver\UnifiedPackage\VirtualAudioDriver\Virtu
+alAudioDriver.inf.
+Drivers installed successfully.
+
+[4] Device node type now:
+
+FriendlyName                    Status InstanceId
+------------                    ------ ----------
+Speakers (CallJoyna Audio)      OK     SWD\MMDEVAPI\{0.0.0.00000000}.{4BD1DABA-5E97-4E2E-87D3-9DDD05591FF4}
+CallJoyna Audio                 OK     SWD\DEVGEN\ISLAUDIO01
+CallJoyna Mic (CallJoyna Audio) OK     SWD\MMDEVAPI\{0.0.1.00000000}.{8AB64B14-EA89-4D1A-8009-6EF68170F689}
+CallJoyna Audio                 Error  ROOT\MEDIA\0002
+
+
+
+[5] Purge endpoint cache as SYSTEM...
+
+===== RESULT =====
+
+[Render] Speakers (CallJoyna Audio)
+    NAME  = 'Speakers'    <-- want 'CallJoyna Speaker'
+    ICON  = '%windir%\system32\mmres.dll,-3010'
+    assoc = ''   <-- non-empty proves EP\0 migrated
+    ff    = 2
+
+[Capture] CallJoyna Mic (CallJoyna Audio)
+    NAME  = 'CallJoyna Mic'    <-- want 'CallJoyna Speaker'
+    ICON  = '%windir%\system32\mmres.dll,-3014'
+    assoc = ''   <-- non-empty proves EP\0 migrated
+    ff    = 4
+**********************
+Windows PowerShell transcript end
+End time: 20260715131949
+**********************

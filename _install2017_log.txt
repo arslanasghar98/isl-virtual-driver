@@ -1,0 +1,72 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715150345
+Username: DESKTOP-R8QHVL0\Datics
+RunAs User: DESKTOP-R8QHVL0\Datics
+Configuration Name: 
+Machine: DESKTOP-R8QHVL0 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\PROGRA~1\KMSpico\temp\claude\d--Datics-virtual-mic-isl\02f3b941-246d-4b43-bc19-8fff2f7b329e\scratchpad\InstallSigned2017.ps1
+Process ID: 25780
+PSVersion: 5.1.26100.8875
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8875
+BuildVersion: 10.0.26100.8875
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+===== INSTALL Microsoft-signed CallJoyna Virtual Audio Driver v2.0.17.0 =====
+
+[1] Removing ALL existing CallJoyna devices (incl. test/devgen leftovers)...
+   remove SWD\MMDEVAPI\{0.0.0.00000000}.{3562AECB-C4FE-4058-8008-A712B9636128} [OK]
+   remove SWD\MMDEVAPI\{0.0.1.00000000}.{7F0C93CF-2AA3-4410-A9FD-9CDEBFB6B0D3} [OK]
+   remove ROOT\MEDIA\0001 [OK]
+
+[2] Removing old driver package(s) (test-signed build)...
+   deleting oem51.inf
+
+[3] devcon install -> real ROOT device...
+Device node created. Install is complete when drivers are installed...
+Updating drivers for ROOT\VirtualAudioDriver from E:\Downloads\Signed_1152921505701423577\drivers\VirtualAudioDriver\VirtualAudioDriver.inf.
+Drivers installed successfully.
+
+[4] Purging endpoint cache as SYSTEM so name+icon rebuild from the new driver...
+
+=========== RESULT ===========
+Driver in store:
+
+> Original Name:      virtualaudiodriver.inf
+  Provider Name:      CallJoyna
+  Class Name:         MEDIA
+  Class GUID:         {4d36e96c-e325-11ce-bfc1-08002be10318}
+  Driver Version:     07/15/2026 2.0.17.0
+
+Signer of loaded driver:
+  CN=Microsoft Windows Hardware Compatibility Publisher, O=Microsoft Corporation, L=Redmond, S=Washington, C=US
+
+Devices:
+
+
+
+FriendlyName                        Status InstanceId
+------------                        ------ ----------
+CallJoyna Speaker (CallJoyna Audio) OK     SWD\MMDEVAPI\{0.0.0.00000000}.{59433FBA-9024-40F1-B5BE-58B462C8190B}
+CallJoyna Mic (CallJoyna Audio)     OK     SWD\MMDEVAPI\{0.0.1.00000000}.{AFE5240C-DB2B-4D8D-B54F-BBC94AEC31E2}
+CallJoyna Audio                     OK     ROOT\MEDIA\0001
+
+
+
+>>> [Render] CallJoyna Speaker (CallJoyna Audio)
+      NAME  = 'CallJoyna Speaker'
+      ICON  = '%windir%\system32\drivers\virtualaudiodriver.sys,-100'
+      assoc = '{00000000-0000-0000-0000-000000000000}'
+
+>>> [Capture] CallJoyna Mic (CallJoyna Audio)
+      NAME  = 'CallJoyna Mic'
+      ICON  = '%windir%\system32\drivers\virtualaudiodriver.sys,-101'
+      assoc = '{00000000-0000-0000-0000-000000000000}'
+**********************
+Windows PowerShell transcript end
+End time: 20260715150425
+**********************

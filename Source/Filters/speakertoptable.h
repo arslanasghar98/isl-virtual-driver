@@ -82,8 +82,14 @@ PCPIN_DESCRIPTOR SpeakerTopoMiniportPins[] =
       SpeakerTopoPinDataRangePointersBridge,            // DataRanges
       KSPIN_DATAFLOW_OUT,                               // DataFlow
       KSPIN_COMMUNICATION_NONE,                         // Communication
-      &KSNODETYPE_SPEAKER,                              // Category - Speaker type for proper endpoint naming
-      &SPEAKER_CUSTOM_NAME,                             // Name - Custom "ISL Speaker" name
+      &KSNODETYPE_LINE_CONNECTOR,                       // Category - Line type (not auto-set as communications device).
+                                                        //   DO NOT change to KSNODETYPE_SPEAKER: Windows hardcodes that
+                                                        //   category's endpoint name to "Speakers" and ignores the Name GUID
+                                                        //   below, so the endpoint shows "Speakers" instead of "CallJoyna
+                                                        //   Speaker". Commit 28131ad ("include arm driver") made exactly that
+                                                        //   change and regressed the name. KSNODETYPE_MICROPHONE has no such
+                                                        //   override, which is why only the speaker broke.
+      &SPEAKER_CUSTOM_NAME,                             // Name - Custom "CallJoyna Speaker" name (MediaCategories {7ae81ff4})
       0                                                 // Reserved
     }
   }
@@ -103,7 +109,7 @@ KSJACK_DESCRIPTION SpeakerJackDescBridge =
 };
 
 // Only return a KSJACK_DESCRIPTION for the physical bridge pin.
-static 
+static
 PKSJACK_DESCRIPTION SpeakerJackDescriptions[] =
 {
     NULL,

@@ -1,0 +1,52 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715131407
+Username: DESKTOP-R8QHVL0\Datics
+RunAs User: DESKTOP-R8QHVL0\Datics
+Configuration Name: 
+Machine: DESKTOP-R8QHVL0 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\PROGRA~1\KMSpico\temp\claude\d--Datics-virtual-mic-isl\02f3b941-246d-4b43-bc19-8fff2f7b329e\scratchpad\CleanDevgen.ps1
+Process ID: 8380
+PSVersion: 5.1.26100.8875
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8875
+BuildVersion: 10.0.26100.8875
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+[1] Removing stale devgen device...
+SWD\DEVGEN\ISLAUDIO01                                       : Removed
+1 device(s) were removed.
+Microsoft PnP Utility
+
+
+[2] Devices now:
+
+FriendlyName                    Status InstanceId
+------------                    ------ ----------
+Speakers (CallJoyna Audio)      OK     SWD\MMDEVAPI\{0.0.0.00000000}.{3334C928-56C2-4922-B9A8-54A2982BE7AE}
+CallJoyna Mic (CallJoyna Audio) OK     SWD\MMDEVAPI\{0.0.1.00000000}.{FA240C95-BACE-48D2-8D46-530E7BE4E25D}
+CallJoyna Audio                 Error  SWD\DEVGEN\ISLAUDIO01
+CallJoyna Audio                 OK     ROOT\MEDIA\0002
+
+
+
+[3] Purge endpoints as SYSTEM + rebuild...
+
+===== FINAL =====
+
+[Render] Speakers (CallJoyna Audio)
+    NAME  = 'Speakers'
+    ICON  = '%windir%\system32\mmres.dll,-3010'
+    assoc = ''
+
+[Capture] CallJoyna Mic (CallJoyna Audio)
+    NAME  = 'CallJoyna Mic'
+    ICON  = '%windir%\system32\mmres.dll,-3014'
+    assoc = ''
+**********************
+Windows PowerShell transcript end
+End time: 20260715131437
+**********************

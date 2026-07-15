@@ -1,0 +1,65 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715132406
+Username: DESKTOP-R8QHVL0\Datics
+RunAs User: DESKTOP-R8QHVL0\Datics
+Configuration Name: 
+Machine: DESKTOP-R8QHVL0 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\PROGRA~1\KMSpico\temp\claude\d--Datics-virtual-mic-isl\02f3b941-246d-4b43-bc19-8fff2f7b329e\scratchpad\Cleanup.ps1
+Process ID: 5240
+PSVersion: 5.1.26100.8875
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8875
+BuildVersion: 10.0.26100.8875
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+=== BEFORE ===
+
+FriendlyName                    Status InstanceId
+------------                    ------ ----------
+Speakers (CallJoyna Audio)      OK     SWD\MMDEVAPI\{0.0.0.00000000}.{9C737AD9-A209-4055-9934-E9E71DBAA47E}
+CallJoyna Mic (CallJoyna Audio) OK     SWD\MMDEVAPI\{0.0.1.00000000}.{50B51F1A-7B2E-4724-8470-FD6A05774176}
+CallJoyna Audio                 OK     SWD\DEVGEN\ISLAUDIO01
+CallJoyna Audio                 Error  ROOT\MEDIA\0002
+
+
+
+=== devgen /remove (verbose) ===
+Microsoft Device Generator
+
+Devgen /remove can only remove devices created by devgen /add.
+Device removal failed: 0x00000490
+devgen exit: 1168
+
+=== devcon remove both ===
+SWD\DEVGEN\ISLAUDIO01                                       : Removed
+1 device(s) were removed.
+ROOT\MEDIA\0002                                             : Removed
+1 device(s) were removed.
+
+=== AFTER ===
+
+FriendlyName                    Status InstanceId
+------------                    ------ ----------
+Speakers (CallJoyna Audio)      OK     SWD\MMDEVAPI\{0.0.0.00000000}.{A6270CEA-D3DB-4070-AE0F-35B53E16FDED}
+CallJoyna Audio                 OK     SWD\DEVGEN\ISLAUDIO01
+CallJoyna Mic (CallJoyna Audio) OK     SWD\MMDEVAPI\{0.0.1.00000000}.{68B5B322-7FF1-41F9-88B5-FA97CBCBD0BB}
+
+
+
+All non-present too:
+
+FriendlyName           Status Present InstanceId
+------------           ------ ------- ----------
+CallJoyna Audio        OK        True SWD\DEVGEN\ISLAUDIO01
+VB-Audio Virtual Cable OK        True ROOT\MEDIA\0000
+                       Error     True ROOT\MEDIA\0001
+
+
+**********************
+Windows PowerShell transcript end
+End time: 20260715132415
+**********************

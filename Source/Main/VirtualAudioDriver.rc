@@ -25,4 +25,23 @@ Abstract:
 
 #include "common.ver"
 
+//
+// Custom CallJoyna endpoint icons.
+//
+// The Windows audio endpoint builder auto-discovers the endpoint icon from icon
+// resources embedded in the driver binary, by a fixed ID convention:
+//     RT_GROUP_ICON 100 -> render  (speaker) endpoints
+//     RT_GROUP_ICON 101 -> capture (mic)     endpoints
+// No INF directive is involved. Verified against VB-Audio Cable, whose .sys carries
+// exactly group icons 100 and 101, and whose endpoints resolve to
+// "vbaudio_cable64_win10.sys,-100" (render) and ",-101" (capture).
+//
+// Both IDs must be present: an ID that is missing simply falls back to the generic
+// mmres.dll icon for that data flow.
+//
+#define IDI_CALLJOYNA_RENDER  100
+#define IDI_CALLJOYNA_CAPTURE 101
+IDI_CALLJOYNA_RENDER  ICON "CallJoyna.ico"
+IDI_CALLJOYNA_CAPTURE ICON "CallJoyna.ico"
+
 
