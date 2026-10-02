@@ -781,6 +781,10 @@ Return Value:
             ntStatus = pMiniport->PropertyHandlerJackDescription2(PropertyRequest);
         }
     }
+    else if (IsEqualGUIDAligned(*PropertyRequest->PropertyItem->Set, KSPROPSETID_CallJoynaTelemetry))
+    {
+        ntStatus = pMiniport->PropertyHandlerCallJoynaTelemetry(PropertyRequest);
+    }
 
     return ntStatus;
 } // PropertyHandler_TopoFilter

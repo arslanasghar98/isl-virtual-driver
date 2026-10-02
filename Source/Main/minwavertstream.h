@@ -77,6 +77,13 @@ public:
         _In_  GUID                SignalProcessingMode
     );
 
+    // Adds/removes this stream's single unit of the adapter engaged count
+    // (mic or speaker, by m_bCapture). Idempotent; non-paged.
+    VOID                        SetEngaged
+    (
+        _In_  BOOLEAN             Engaged
+    );
+
     // Friends
     friend class                CMiniportWaveRT;
     friend EXT_CALLBACK         TimerNotifyRT;
@@ -89,6 +96,7 @@ protected:
     BYTE*                       m_pDmaBuffer;
     ULONG                       m_ulNotificationsPerBuffer;
     KSSTATE                     m_KsState;
+    BOOLEAN                     m_bCountedAsEngaged;    // TRUE while this stream holds one unit of the adapter engaged count
     PKTIMER                     m_pTimer;
     PRKDPC                      m_pDpc;
     ULONGLONG                   m_ullPlayPosition;

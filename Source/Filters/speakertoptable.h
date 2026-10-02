@@ -311,6 +311,13 @@ PCPROPERTY_ITEM PropertiesSpeakerTopoFilter[] =
         KSPROPERTY_TYPE_GET |
         KSPROPERTY_TYPE_BASICSUPPORT,
         PropertyHandler_SpeakerTopoFilter
+    },
+    {
+        &KSPROPSETID_CallJoynaTelemetry,
+        KSPROPERTY_CALLJOYNA_TELEMETRY,
+        KSPROPERTY_TYPE_GET |
+        KSPROPERTY_TYPE_BASICSUPPORT,
+        PropertyHandler_SpeakerTopoFilter
     }
 };
 

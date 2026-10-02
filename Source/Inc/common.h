@@ -14,6 +14,8 @@ Abstract:
 #ifndef _VIRTUALAUDIODRIVER_COMMON_H_
 #define _VIRTUALAUDIODRIVER_COMMON_H_
 
+#include "calljoyna_telemetry.h"   // KSPROPSETID_CallJoynaTelemetry + CALLJOYNA_TELEMETRY (shared with user mode)
+
 #define HNSTIME_PER_MILLISECOND 10000
 
 //=============================================================================
@@ -559,19 +561,40 @@ DECLARE_INTERFACE_(IAdapterCommon, IUnknown)
         _In_  ULONG   Channels
     ) PURE;
 
+    // Zeroes the ring, resets read/write positions, data-available and the
+    // preroll gate. Takes the loopback spinlock; callable at <= DISPATCH_LEVEL.
+    STDMETHOD_(VOID,            ResetLoopbackBuffer)
+    (
+        THIS_
+    ) PURE;
+
     //=========================================================================
-    // Mic engagement notification methods - signals user-mode apps when mic starts/stops
+    // Stream engagement notification - signals user-mode apps when a capture
+    // (mic) or render (speaker) stream enters / leaves KSSTATE_RUN.
+    //   IsCapture == TRUE  -> mic counter,     Global\ISLMicEngaged + Global\CallJoynaMicEngaged
+    //   IsCapture == FALSE -> speaker counter, Global\CallJoynaSpeakerEngaged
+    // Callers must guarantee each stream contributes at most once (see
+    // CMiniportWaveRTStream::SetEngaged).
     //=========================================================================
-    STDMETHOD_(VOID,            NotifyMicEngaged)
+    STDMETHOD_(VOID,            NotifyStreamEngaged)
     (
         THIS_
         _In_  BOOLEAN IsCapture
     ) PURE;
 
-    STDMETHOD_(VOID,            NotifyMicDisengaged)
+    STDMETHOD_(VOID,            NotifyStreamDisengaged)
     (
         THIS_
         _In_  BOOLEAN IsCapture
+    ) PURE;
+
+    //=========================================================================
+    // Telemetry snapshot (KSPROPSETID_CallJoynaTelemetry / KSPROPERTY_CALLJOYNA_TELEMETRY)
+    //=========================================================================
+    STDMETHOD_(VOID,            GetTelemetry)
+    (
+        THIS_
+        _Out_ PCALLJOYNA_TELEMETRY Telemetry
     ) PURE;
 
 };

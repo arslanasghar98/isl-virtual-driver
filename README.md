@@ -131,41 +131,59 @@ By installing these drivers, you can process or forward audio without physical h
 
 ---
 
-## Mic Engagement Notification (User-Mode Integration)
+## Stream Engagement Notification (User-Mode Integration)
 
-The driver provides a **named kernel event** that allows user-mode applications to detect when the virtual microphone is being used:
+The driver publishes **named kernel notification events** so user-mode applications can detect,
+without polling, when the virtual microphone or the virtual speaker is actually in use.
 
-### Event Name
-```
-Global\ISLMicEngaged
-```
+### Event Names
 
-### How It Works
+| Event (Win32 name)                  | Direction        | Signalled while                                   |
+|-------------------------------------|------------------|---------------------------------------------------|
+| `Global\CallJoynaMicEngaged`        | capture (mic)    | at least one **CallJoyna Mic** capture stream is in `KSSTATE_RUN` |
+| `Global\ISLMicEngaged`              | capture (mic)    | identical to `CallJoynaMicEngaged` (legacy name, kept for compatibility) |
+| `Global\CallJoynaSpeakerEngaged`    | render (speaker) | at least one **CallJoyna Speaker** render stream is in `KSSTATE_RUN` |
 
-1. When any application starts capturing audio from **ISL Mic**, the driver sets the event to **signaled** state
-2. When all applications stop capturing, the event is **cleared**
-3. User-mode applications can wait on this event for instant notification (<1ms latency)
+Kernel object paths are `\BaseNamedObjects\Global\<name>`. All three are manual-reset
+notification events created by the driver at adapter start in the **cleared** state.
+`ISLMicEngaged` and `CallJoynaMicEngaged` are two distinct named objects that are always
+set and cleared together; new code should use the `CallJoyna*` names.
+
+### Semantics (2.0.18+)
+
+The driver keeps one counter per direction (`micEngagedCount`, `speakerEngagedCount`):
+
+1. A wave stream entering `KSSTATE_RUN` from any non-RUN state adds **exactly one** to its
+   direction's counter. A RUN -> RUN request does not double count.
+2. `RUN -> PAUSE`, `RUN -> STOP`, `RUN -> ACQUIRE`, and stream destruction while running
+   each remove that stream's contribution **exactly once** (a per-stream flag guards this).
+   `PAUSE -> RUN` adds it back. Consequently `count == number of streams currently running`.
+3. The event is **set whenever the counter is >= 1** and **cleared when it reaches 0**.
+   There is no startup suppression window any more (versions <= 2.0.17 ignored engagement
+   for the first 5 s after driver start while still incrementing the counter, so the event
+   and the counter could disagree; that behaviour was removed in 2.0.18).
+4. The live counter values are also readable through the telemetry property (see below).
 
 ### Usage Example (C#/.NET)
 
 ```csharp
 using System.Threading;
 
-// Wait for ISL Mic to become engaged
+// Wait for the CallJoyna Mic to become engaged
 EventWaitHandle micEvent = new EventWaitHandle(
     false,
     EventResetMode.ManualReset,
-    "Global\\ISLMicEngaged"
+    "Global\\CallJoynaMicEngaged"
 );
 
 while (true)
 {
     micEvent.WaitOne();  // Blocks until mic is engaged
-    Console.WriteLine("ISL Mic is now active - start recording!");
+    Console.WriteLine("CallJoyna Mic is now active - start recording!");
 
     // Wait for mic to disengage
     while (micEvent.WaitOne(100)) { }  // Polling with timeout
-    Console.WriteLine("ISL Mic stopped - stop recording!");
+    Console.WriteLine("CallJoyna Mic stopped - stop recording!");
 }
 ```
 
@@ -173,9 +191,12 @@ while (true)
 
 ```javascript
 // Requires a native addon to wait on Windows kernel events
-const micEvent = new WaitableEvent('Global\\ISLMicEngaged');
+const micEvent = new WaitableEvent('Global\\CallJoynaMicEngaged');
 micEvent.on('signaled', () => console.log('Mic engaged!'));
 micEvent.on('cleared', () => console.log('Mic disengaged!'));
+
+const spkEvent = new WaitableEvent('Global\\CallJoynaSpeakerEngaged');
+spkEvent.on('signaled', () => console.log('Speaker engaged!'));
 ```
 
 ### Advantages Over Polling
@@ -183,7 +204,221 @@ micEvent.on('cleared', () => console.log('Mic disengaged!'));
 | Approach | Latency | CPU Usage |
 |----------|---------|-----------|
 | Polling (500ms) | ~250ms average | Continuous |
-| **Event-Driven (ISL)** | **<1ms** | **Zero when idle** |
+| **Event-Driven (CallJoyna)** | **<1ms** | **Zero when idle** |
+
+---
+
+## Loopback Buffer Reset Semantics (2.0.18+)
+
+Speaker audio reaches the virtual microphone through a kernel-mode ring buffer
+(28,672 bytes = 7168 frames of 48 kHz / 16-bit / stereo, ~150 ms) guarded by a spinlock.
+Reads are gated by a preroll: silence is produced until 2048 frames (~42 ms) are queued,
+and the gate re-arms if the queue drops below 512 frames (~10 ms).
+
+The ring is **zeroed and fully reset** (read/write positions, bytes-available and the
+preroll gate) at these points:
+
+| Trigger | Where |
+|---------|-------|
+| A render (speaker) stream is created / its format is set | `SetLoopbackFormat` (unchanged) |
+| A **capture (mic) stream enters `KSSTATE_RUN` from a non-RUN state** | `ResetLoopbackBuffer`, called from the capture `SetState(KSSTATE_RUN)` path (**new in 2.0.18**) |
+
+The second reset guarantees that a new (or resumed) microphone session never starts by
+replaying up to ~150 ms of stale speaker audio that was queued while nothing was capturing.
+The reset happens before the capture stream's DMA timer is started and takes the same
+spinlock as the render-side writer, so it cannot tear a concurrent write.
+
+Note: the reset is per capture stream transition, not per "first" stream. If a second
+application starts capturing from CallJoyna Mic while a first one is already running, the
+first one will observe one preroll gap (~42 ms of silence) at that moment.
+
+---
+
+## Telemetry Property (`KSPROPSETID_CallJoynaTelemetry`)
+
+Both topology filters (**CallJoyna Speaker** and **CallJoyna Mic**) expose a private,
+filter-scoped, GET-only KS property that returns a consistent snapshot of the driver's
+internal counters. Definitions live in
+[`Source/Inc/calljoyna_telemetry.h`](Source/Inc/calljoyna_telemetry.h), which is
+designed to be included from user-mode projects as well (after `<windows.h>` + `<ks.h>`).
+
+| Item | Value |
+|------|-------|
+| Property set GUID | `{EA30EDA4-0EDC-4C03-B8B4-6455AFE518E1}` (`KSPROPSETID_CallJoynaTelemetry`) |
+| Property id | `KSPROPERTY_CALLJOYNA_TELEMETRY = 1` |
+| Supported verbs | `KSPROPERTY_TYPE_GET`, `KSPROPERTY_TYPE_BASICSUPPORT` |
+| Value | `CALLJOYNA_TELEMETRY`, 32 bytes, 4-byte packed |
+
+```c
+typedef struct _CALLJOYNA_TELEMETRY {
+    ULONG cbSize;                 // 0  sizeof(CALLJOYNA_TELEMETRY) = 32, filled by the driver
+    ULONG micEngagedCount;        // 4  capture streams currently in KSSTATE_RUN
+    ULONG speakerEngagedCount;    // 8  render streams currently in KSSTATE_RUN
+    ULONG loopbackBytesAvailable; // 12 bytes queued in the speaker->mic ring right now
+    ULONG loopbackWriteCount;     // 16 WriteToLoopbackBuffer calls that wrote >= 1 frame
+    ULONG loopbackReadCount;      // 20 ReadFromLoopbackBuffer calls
+    ULONG loopbackOverruns;       // 24 writes that had to discard the oldest queued audio
+    ULONG loopbackUnderruns;      // 28 reads (after preroll) that had to zero-fill
+} CALLJOYNA_TELEMETRY;
+```
+
+Notes:
+
+- `loopbackWriteCount`, `loopbackReadCount`, `loopbackOverruns`, `loopbackUnderruns` are
+  monotonic 32-bit counters that wrap; take deltas between two reads.
+- Silence emitted while the preroll gate is waiting for the initial 2048 frames is by design
+  and is **not** counted as an underrun; an underrun is a zero-fill after preroll completed
+  (low-water trip or short read).
+- Reading with `ValueSize == 0` returns `STATUS_BUFFER_OVERFLOW` (`ERROR_MORE_DATA` in
+  user mode) with the required size, like every other KS property.
+
+### User-mode sample (C++, `IOCTL_KS_PROPERTY` on the topology filter)
+
+```cpp
+// Link with: setupapi.lib ksuser.lib (or use DeviceIoControl directly, as below)
+#include <windows.h>
+#include <setupapi.h>
+#include <ks.h>
+#include <ksmedia.h>
+#include <devpkey.h>
+#include <string>
+#include "calljoyna_telemetry.h"   // from Source/Inc
+
+// Opens the KSCATEGORY_TOPOLOGY interface whose friendly name contains `match`
+// ("CallJoyna Speaker" or "CallJoyna Mic"). Either filter returns the same data.
+static HANDLE OpenCallJoynaTopology(const wchar_t* match)
+{
+    HDEVINFO set = SetupDiGetClassDevsW(&KSCATEGORY_TOPOLOGY, nullptr, nullptr,
+                                        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+    if (set == INVALID_HANDLE_VALUE) return INVALID_HANDLE_VALUE;
+
+    HANDLE h = INVALID_HANDLE_VALUE;
+    SP_DEVICE_INTERFACE_DATA ifd = { sizeof(ifd) };
+    for (DWORD i = 0; SetupDiEnumDeviceInterfaces(set, nullptr, &KSCATEGORY_TOPOLOGY, i, &ifd); ++i)
+    {
+        DWORD cb = 0;
+        SetupDiGetDeviceInterfaceDetailW(set, &ifd, nullptr, 0, &cb, nullptr);
+        auto* detail = (SP_DEVICE_INTERFACE_DETAIL_DATA_W*)malloc(cb);
+        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+        SP_DEVINFO_DATA dev = { sizeof(dev) };
+        if (SetupDiGetDeviceInterfaceDetailW(set, &ifd, detail, cb, nullptr, &dev))
+        {
+            // The interface path looks like \\?\ROOT#MEDIA#0000#{dda54a40-...}\CallJoynaTopologySpeaker
+            // Match on the reference string / friendly name; here: the path contains `match`
+            // with spaces removed (e.g. L"TopologySpeaker" / L"TopologyMicArray1"), or read
+            // DEVPKEY_DeviceInterface_FriendlyName via SetupDiGetDeviceInterfacePropertyW.
+            if (wcsstr(detail->DevicePath, match))
+            {
+                h = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+            }
+        }
+        free(detail);
+        if (h != INVALID_HANDLE_VALUE) break;
+    }
+    SetupDiDestroyDeviceInfoList(set);
+    return h;
+}
+
+static bool ReadCallJoynaTelemetry(HANDLE filter, CALLJOYNA_TELEMETRY& out)
+{
+    KSPROPERTY prop = {};
+    prop.Set   = KSPROPSETID_CallJoynaTelemetry;
+    prop.Id    = KSPROPERTY_CALLJOYNA_TELEMETRY;
+    prop.Flags = KSPROPERTY_TYPE_GET;
+
+    OVERLAPPED ov = {};
+    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    DWORD returned = 0;
+    BOOL ok = DeviceIoControl(filter, IOCTL_KS_PROPERTY,
+                              &prop, sizeof(prop), &out, sizeof(out), &returned, &ov);
+    if (!ok && GetLastError() == ERROR_IO_PENDING)
+        ok = GetOverlappedResult(filter, &ov, &returned, TRUE);
+    CloseHandle(ov.hEvent);
+    return ok && returned >= sizeof(CALLJOYNA_TELEMETRY);
+}
+
+int main()
+{
+    HANDLE h = OpenCallJoynaTopology(L"TopologySpeaker");   // or L"TopologyMicArray1"
+    if (h == INVALID_HANDLE_VALUE) return 1;
+
+    CALLJOYNA_TELEMETRY t = {};
+    if (ReadCallJoynaTelemetry(h, t))
+        printf("mic=%lu spk=%lu avail=%lu w=%lu r=%lu over=%lu under=%lu\n",
+               t.micEngagedCount, t.speakerEngagedCount, t.loopbackBytesAvailable,
+               t.loopbackWriteCount, t.loopbackReadCount, t.loopbackOverruns, t.loopbackUnderruns);
+    CloseHandle(h);
+    return 0;
+}
+```
+
+The same request can be issued through `IKsControl::KsProperty` on the filter (obtain it
+via `KsOpenDefaultDevice` / `IKsControl` from `ksproxy`), which is just a wrapper around
+`IOCTL_KS_PROPERTY`.
+
+---
+
+## INF: `PKEY_AudioDevice_NeverSetAsDefaultEndpoint` review
+
+Both endpoints set (`VirtualAudioDriver.inx`, `[...AddReg]` sections):
+
+```
+HKR,EP\0,%PKEY_AudioDevice_NeverSetAsDefaultEndpoint%,0x00010001,0x00000304
+```
+
+The value is a DWORD mask of data-flow flags and device-role flags
+(Microsoft docs: *PKEY_AudioDevice_NeverSetAsDefaultEndpoint*). It only takes effect
+because `PKEY_AudioEndpoint_Association` is set in the same `EP\0` subkey (it is, to
+`KSNODETYPE_ANY`, for both endpoints):
+
+| Flag                      | Value   | Meaning |
+|---------------------------|---------|---------|
+| `ROLE_MASK_CONSOLE`       | `0x001` | applies to the **eConsole** role |
+| `ROLE_MASK_MULTIMEDIA`    | `0x002` | applies to the **eMultimedia** role |
+| `ROLE_MASK_COMMUNICATION` | `0x004` | applies to the **eCommunications** role |
+| `FLOW_MASK_RENDER`        | `0x100` | applies to the render (speaker) flow |
+| `FLOW_MASK_CAPTURE`       | `0x200` | applies to the capture (mic) flow |
+
+The endpoint can never become the default device for the (flow, role) pairs selected by
+the mask, neither through Windows' automatic selection nor through the Sound settings UI.
+
+- **`0x304` (current)** = `FLOW_MASK_RENDER | FLOW_MASK_CAPTURE | ROLE_MASK_COMMUNICATION`.
+  CallJoyna Speaker / Mic can never be the **default communications** device (so Teams,
+  Zoom, etc. never pick them up implicitly), but the user can still make them the default
+  **console/multimedia** device, and any app can still select them explicitly.
+- **`0x307`** would add `ROLE_MASK_CONSOLE | ROLE_MASK_MULTIMEDIA`: the endpoints could then
+  never be default for *any* role and could only be used by explicit per-application
+  selection. That would break users who route system audio to "CallJoyna Speaker" via Sound
+  settings, so **the value is intentionally left at `0x304`** in 2.0.18; change it only
+  together with an app-side decision on default-device handling.
+
+---
+
+## Changelog
+
+### 2.0.18.0 (2026-09-16)
+
+- **Loopback ring reset on mic RUN**: the speaker->mic ring buffer is zeroed and its preroll
+  gate re-armed whenever a capture stream enters `KSSTATE_RUN` from a non-RUN state
+  (`CAdapterCommon::ResetLoopbackBuffer`, under the loopback spinlock).
+- **Accurate engaged counts**: `RUN -> PAUSE` now decrements and `PAUSE -> RUN` increments;
+  each stream contributes at most 1 (`m_bCountedAsEngaged`) and releases it exactly once on
+  STOP / ACQUIRE / destruction. `count == running streams` at all times.
+- **Startup suppression removed**: the 5 s post-start window during which the mic event was
+  not signalled (while the counter still incremented) is gone; the event is set whenever the
+  counter is >= 1.
+- **New events**: `Global\CallJoynaMicEngaged` (same semantics as the retained
+  `Global\ISLMicEngaged`, both always set/cleared together) and
+  `Global\CallJoynaSpeakerEngaged` for render streams, backed by `m_lSpeakerEngagedCount`.
+- **Telemetry property** `KSPROPSETID_CallJoynaTelemetry`
+  `{EA30EDA4-0EDC-4C03-B8B4-6455AFE518E1}` / id 1 (GET + BASICSUPPORT) on both topology
+  filters, returning `CALLJOYNA_TELEMETRY` (engaged counts, ring bytes available,
+  write/read call counts, overruns, underruns). Header: `Source/Inc/calljoyna_telemetry.h`.
+- `DriverVer` bumped to `09/16/2026, 2.0.18.0`.
+- `PKEY_AudioDevice_NeverSetAsDefaultEndpoint` reviewed and intentionally kept at `0x304`
+  (see above).
 
 ---
 

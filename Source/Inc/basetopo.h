@@ -77,6 +77,13 @@ class CMiniportTopologyVirtualAudioDriver
         _In_  PPCPROPERTY_REQUEST PropertyRequest
     );
 
+    // KSPROPSETID_CallJoynaTelemetry / KSPROPERTY_CALLJOYNA_TELEMETRY (GET + BASICSUPPORT)
+    // Shared by the speaker and mic topology filters.
+    NTSTATUS                    PropertyHandlerCallJoynaTelemetry
+    (
+        _In_  PPCPROPERTY_REQUEST PropertyRequest
+    );
+
     VOID                        AddEventToEventList
     (
         _In_  PKSEVENT_ENTRY    EventEntry 

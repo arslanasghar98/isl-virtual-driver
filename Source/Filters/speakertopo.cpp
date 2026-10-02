@@ -75,6 +75,10 @@ Return Value:
                 );
         }
     }
+    else if (IsEqualGUIDAligned(*PropertyRequest->PropertyItem->Set, KSPROPSETID_CallJoynaTelemetry))
+    {
+        ntStatus = pMiniport->PropertyHandlerCallJoynaTelemetry(PropertyRequest);
+    }
 
     return ntStatus;
 } // PropertyHandler_SpeakerTopoFilter

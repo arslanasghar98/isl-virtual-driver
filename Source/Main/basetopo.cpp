@@ -357,6 +357,73 @@ Return Value:
 
 //=============================================================================
 #pragma code_seg("PAGE")
+NTSTATUS
+CMiniportTopologyVirtualAudioDriver::PropertyHandlerCallJoynaTelemetry
+(
+    _In_  PPCPROPERTY_REQUEST     PropertyRequest
+)
+/*++
+
+Routine Description:
+
+  Handles ( KSPROPSETID_CallJoynaTelemetry, KSPROPERTY_CALLJOYNA_TELEMETRY ).
+  Filter-scoped, GET only. Returns a CALLJOYNA_TELEMETRY snapshot taken from
+  the shared adapter object, so both topology filters report the same data.
+
+Arguments:
+
+  PropertyRequest - property request structure
+
+Return Value:
+
+  NT status code.
+
+--*/
+{
+    PAGED_CODE();
+
+    ASSERT(PropertyRequest);
+
+    DPF_ENTER(("[PropertyHandlerCallJoynaTelemetry]"));
+
+    NTSTATUS ntStatus = STATUS_INVALID_DEVICE_REQUEST;
+
+    if (PropertyRequest->PropertyItem->Id != KSPROPERTY_CALLJOYNA_TELEMETRY)
+    {
+        return ntStatus;
+    }
+
+    if (PropertyRequest->Verb & KSPROPERTY_TYPE_BASICSUPPORT)
+    {
+        ntStatus = PropertyHandler_BasicSupport(
+                        PropertyRequest,
+                        KSPROPERTY_TYPE_BASICSUPPORT | KSPROPERTY_TYPE_GET,
+                        VT_ILLEGAL);
+    }
+    else if (PropertyRequest->Verb & KSPROPERTY_TYPE_GET)
+    {
+        // Reports STATUS_BUFFER_OVERFLOW + required size when ValueSize == 0,
+        // STATUS_BUFFER_TOO_SMALL when it is non-zero but too small.
+        ntStatus = ValidatePropertyParams(PropertyRequest, sizeof(CALLJOYNA_TELEMETRY));
+        if (NT_SUCCESS(ntStatus))
+        {
+            if (m_AdapterCommon)
+            {
+                m_AdapterCommon->GetTelemetry((PCALLJOYNA_TELEMETRY)PropertyRequest->Value);
+                PropertyRequest->ValueSize = sizeof(CALLJOYNA_TELEMETRY);
+            }
+            else
+            {
+                ntStatus = STATUS_DEVICE_NOT_READY;
+            }
+        }
+    }
+
+    return ntStatus;
+} // PropertyHandlerCallJoynaTelemetry
+
+//=============================================================================
+#pragma code_seg("PAGE")
 NTSTATUS                            
 CMiniportTopologyVirtualAudioDriver::PropertyHandlerMuxSource
 (

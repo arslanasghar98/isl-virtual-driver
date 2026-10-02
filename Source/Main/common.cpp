@@ -317,16 +317,25 @@ class CAdapterCommon :
             _In_  ULONG   Channels
         );
 
+        STDMETHODIMP_(VOID)     ResetLoopbackBuffer(void);
+
         //=====================================================================
-        // Mic engagement notification methods
-        STDMETHODIMP_(VOID)     NotifyMicEngaged
+        // Stream engagement notification methods (mic + speaker)
+        STDMETHODIMP_(VOID)     NotifyStreamEngaged
         (
             _In_  BOOLEAN IsCapture
         );
 
-        STDMETHODIMP_(VOID)     NotifyMicDisengaged
+        STDMETHODIMP_(VOID)     NotifyStreamDisengaged
         (
             _In_  BOOLEAN IsCapture
+        );
+
+        //=====================================================================
+        // Telemetry
+        STDMETHODIMP_(VOID)     GetTelemetry
+        (
+            _Out_ PCALLJOYNA_TELEMETRY Telemetry
         );
 
         //=====================================================================
@@ -354,14 +363,42 @@ class CAdapterCommon :
     ULONG       m_ulLoopbackChannels;       // Number of channels
     BOOLEAN     m_bLoopbackPrerollComplete; // Preroll threshold reached flag
 
+    // Loopback telemetry counters (all guarded by m_LoopbackSpinLock)
+    ULONG       m_ulLoopbackWriteCount;     // WriteToLoopbackBuffer calls that wrote >= 1 frame
+    ULONG       m_ulLoopbackReadCount;      // ReadFromLoopbackBuffer calls
+    ULONG       m_ulLoopbackOverruns;       // Writes that discarded oldest queued audio
+    ULONG       m_ulLoopbackUnderruns;      // Reads after preroll that had to zero-fill
+
     //=====================================================================
-    // Mic engagement notification members
-    HANDLE      m_hMicEngagedEvent;         // Named event for mic engagement notification
-    PKEVENT     m_pMicEngagedEvent;         // Kernel event object
-    LONG        m_lMicEngagedCount;         // Count of active capture streams
-    LARGE_INTEGER m_liInitTimestamp;        // Performance counter at driver init
-    LARGE_INTEGER m_liPerfFrequency;        // Performance counter frequency
-    BOOLEAN     m_bStartupComplete;         // TRUE after startup delay period
+    // Stream engagement notification members
+    //
+    // Mic (capture) engagement is published on two named events with
+    // identical semantics: the legacy "Global\ISLMicEngaged" and the new
+    // "Global\CallJoynaMicEngaged". Speaker (render) engagement is published
+    // on "Global\CallJoynaSpeakerEngaged". An event is signalled while the
+    // matching counter is >= 1 and cleared when it drops to 0.
+    HANDLE      m_hMicEngagedEvent;         // Global\ISLMicEngaged (legacy name)
+    PKEVENT     m_pMicEngagedEvent;
+    HANDLE      m_hMicEngagedEvent2;        // Global\CallJoynaMicEngaged
+    PKEVENT     m_pMicEngagedEvent2;
+    HANDLE      m_hSpeakerEngagedEvent;     // Global\CallJoynaSpeakerEngaged
+    PKEVENT     m_pSpeakerEngagedEvent;
+    LONG        m_lMicEngagedCount;         // Capture streams currently in KSSTATE_RUN
+    LONG        m_lSpeakerEngagedCount;     // Render streams currently in KSSTATE_RUN
+
+    // Helpers for the named engagement events (paged; PASSIVE_LEVEL only -
+    // IoCreateNotificationEvent / ZwClose). Called from Init and the destructor.
+    VOID        CreateEngagedEvent
+    (
+        _In_  PCWSTR      Name,
+        _Out_ PKEVENT *   Event,
+        _Out_ PHANDLE     Handle
+    );
+    VOID        CloseEngagedEvent
+    (
+        _Inout_ PKEVENT * Event,
+        _Inout_ PHANDLE   Handle
+    );
 
     LIST_ENTRY m_SubdeviceCache;
 
@@ -565,13 +602,10 @@ Return Value:
         m_pLoopbackBuffer = NULL;
     }
 
-    // Close mic engagement notification event
-    if (m_hMicEngagedEvent)
-    {
-        ZwClose(m_hMicEngagedEvent);
-        m_hMicEngagedEvent = NULL;
-        m_pMicEngagedEvent = NULL;
-    }
+    // Close engagement notification events (clear first so waiters see "idle")
+    CloseEngagedEvent(&m_pMicEngagedEvent, &m_hMicEngagedEvent);
+    CloseEngagedEvent(&m_pMicEngagedEvent2, &m_hMicEngagedEvent2);
+    CloseEngagedEvent(&m_pSpeakerEngagedEvent, &m_hSpeakerEngagedEvent);
 
     CSaveData::DestroyWorkItems();
     SAFE_RELEASE(m_pPortClsEtwHelper);
@@ -755,37 +789,32 @@ Return Value:
     m_ulLoopbackBitsPerSample = 16;
     m_ulLoopbackChannels = 2;  // STEREO (VB-Cable compatible)
     m_bLoopbackPrerollComplete = FALSE;  // Preroll not yet complete
+    m_ulLoopbackWriteCount = 0;
+    m_ulLoopbackReadCount = 0;
+    m_ulLoopbackOverruns = 0;
+    m_ulLoopbackUnderruns = 0;
     KeInitializeSpinLock(&m_LoopbackSpinLock);
 
     //
-    // Initialize mic engagement notification
+    // Initialize stream engagement notification (mic + speaker)
     //
     m_hMicEngagedEvent = NULL;
     m_pMicEngagedEvent = NULL;
+    m_hMicEngagedEvent2 = NULL;
+    m_pMicEngagedEvent2 = NULL;
+    m_hSpeakerEngagedEvent = NULL;
+    m_pSpeakerEngagedEvent = NULL;
     m_lMicEngagedCount = 0;
-    m_bStartupComplete = FALSE;
-    m_liInitTimestamp = KeQueryPerformanceCounter(&m_liPerfFrequency);  // Record driver init time
+    m_lSpeakerEngagedCount = 0;
 
-    // Create named event for user-mode notification with permissive security
-    // User-mode apps can wait on "Global\ISLMicEngaged" to detect when mic is in use
-    // First try IoCreateNotificationEvent for simplicity, it creates with default kernel security
+    // Named notification events for user-mode. IoCreateNotificationEvent creates
+    // them with default kernel security; the objects are created cleared (idle).
+    // "ISLMicEngaged" is kept for backwards compatibility and is always set/cleared
+    // together with "CallJoynaMicEngaged".
     // TODO: For non-admin user access, may need custom security descriptor
-    {
-        UNICODE_STRING eventName;
-        RtlInitUnicodeString(&eventName, L"\\BaseNamedObjects\\Global\\ISLMicEngaged");
-        m_pMicEngagedEvent = IoCreateNotificationEvent(&eventName, &m_hMicEngagedEvent);
-        if (m_pMicEngagedEvent)
-        {
-            // Start with event cleared (mic not engaged)
-            KeClearEvent(m_pMicEngagedEvent);
-            DPF(D_TERSE, ("Created ISLMicEngaged notification event"));
-        }
-        else
-        {
-            DPF(D_TERSE, ("Warning: Failed to create ISLMicEngaged notification event"));
-            // Not a fatal error - driver works without notification
-        }
-    }
+    CreateEngagedEvent(L"\\BaseNamedObjects\\Global\\ISLMicEngaged",          &m_pMicEngagedEvent,     &m_hMicEngagedEvent);
+    CreateEngagedEvent(L"\\BaseNamedObjects\\Global\\CallJoynaMicEngaged",    &m_pMicEngagedEvent2,    &m_hMicEngagedEvent2);
+    CreateEngagedEvent(L"\\BaseNamedObjects\\Global\\CallJoynaSpeakerEngaged", &m_pSpeakerEngagedEvent, &m_hSpeakerEngagedEvent);
 
     //
     // Initialize SaveData class.
@@ -3152,10 +3181,13 @@ Arguments:
 
     ULONG bufferSpace = m_ulLoopbackBufferSize - m_ulLoopbackDataAvailable;
 
+    m_ulLoopbackWriteCount++;
+
     // If buffer would overflow, advance read position (overwrite oldest data)
     // Ensure overflow adjustment is also sample-aligned
     if (bytesToWrite > bufferSpace)
     {
+        m_ulLoopbackOverruns++;
         ULONG overflow = bytesToWrite - bufferSpace;
         // Round up to next sample boundary to maintain alignment
         overflow = ((overflow + bytesPerSample - 1) / bytesPerSample) * bytesPerSample;
@@ -3221,7 +3253,11 @@ Return Value:
     const ULONG highWaterBytes = LOOPBACK_SAMPLES_HIGH_WATER * bytesPerSample;
     const ULONG lowWaterBytes = LOOPBACK_SAMPLES_LOW_WATER * bytesPerSample;
 
+    m_ulLoopbackReadCount++;
+
     // Hysteresis-based preroll management with dynamic thresholds
+    // Note: silence emitted while waiting for the initial preroll is by design
+    // and is NOT counted as an underrun; only zero-fills after preroll are.
     if (!m_bLoopbackPrerollComplete)
     {
         // Waiting for buffer to fill - check high water mark
@@ -3244,6 +3280,7 @@ Return Value:
         {
             // Buffer critically low - reset preroll to avoid crackling
             m_bLoopbackPrerollComplete = FALSE;
+            m_ulLoopbackUnderruns++;
             RtlZeroMemory(Buffer, ByteCount);
             KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
             return ByteCount;
@@ -3276,6 +3313,12 @@ Return Value:
     // Fill remaining with silence if not enough data
     if (bytesRead < ByteCount)
     {
+        // Only a short read of whole frames is an underrun; the (at most 3 byte)
+        // alignment tail of an unaligned request is not.
+        if (bytesRead < alignedByteCount)
+        {
+            m_ulLoopbackUnderruns++;
+        }
         RtlZeroMemory(Buffer + bytesRead, ByteCount - bytesRead);
     }
 
@@ -3336,100 +3379,220 @@ Arguments:
     KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
 }
 
+#pragma code_seg()
+STDMETHODIMP_(VOID)
+CAdapterCommon::ResetLoopbackBuffer(void)
+/*++
+Routine Description:
+    Discards everything queued in the speaker->mic ring buffer and re-arms the
+    preroll gate. Called when a capture stream (re)enters KSSTATE_RUN so that a
+    fresh mic session never starts by replaying stale audio that was queued
+    while no capture stream was running (or while it was paused).
+
+    Serialised against WriteToLoopbackBuffer / ReadFromLoopbackBuffer by
+    m_LoopbackSpinLock. Non-paged; callable at IRQL <= DISPATCH_LEVEL.
+--*/
+{
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
+
+    m_ulLoopbackWritePos = 0;
+    m_ulLoopbackReadPos = 0;
+    m_ulLoopbackDataAvailable = 0;
+    m_bLoopbackPrerollComplete = FALSE;
+
+    if (m_pLoopbackBuffer && m_ulLoopbackBufferSize > 0)
+    {
+        RtlZeroMemory(m_pLoopbackBuffer, m_ulLoopbackBufferSize);
+    }
+
+    KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
+
+    DPF(D_VERBOSE, ("Loopback buffer reset (capture stream -> RUN)"));
+}
+
 //=============================================================================
-// Mic Engagement Notification Implementation
+// Stream Engagement Notification Implementation
 //=============================================================================
+
+#pragma code_seg("PAGE")
+VOID
+CAdapterCommon::CreateEngagedEvent
+(
+    _In_  PCWSTR      Name,
+    _Out_ PKEVENT *   Event,
+    _Out_ PHANDLE     Handle
+)
+/*++
+Routine Description:
+    Creates (or opens, if it already exists) a named notification event in the
+    cleared state. Failure is not fatal: the driver works without notification.
+    PASSIVE_LEVEL only (IoCreateNotificationEvent).
+--*/
+{
+    PAGED_CODE();
+
+    UNICODE_STRING eventName;
+
+    *Event = NULL;
+    *Handle = NULL;
+
+    RtlInitUnicodeString(&eventName, Name);
+    *Event = IoCreateNotificationEvent(&eventName, Handle);
+    if (*Event)
+    {
+        KeClearEvent(*Event);
+        DPF(D_TERSE, ("Created engagement notification event %ws", Name));
+    }
+    else
+    {
+        *Handle = NULL;
+        DPF(D_TERSE, ("Warning: Failed to create engagement notification event %ws", Name));
+    }
+}
+
+#pragma code_seg("PAGE")
+VOID
+CAdapterCommon::CloseEngagedEvent
+(
+    _Inout_ PKEVENT * Event,
+    _Inout_ PHANDLE   Handle
+)
+/*++
+Routine Description:
+    Clears and closes a named engagement event. PASSIVE_LEVEL only (ZwClose).
+--*/
+{
+    PAGED_CODE();
+
+    if (*Event)
+    {
+        // Leave the object in the idle state for any user-mode waiter that
+        // still holds its own handle after the driver goes away.
+        KeClearEvent(*Event);
+    }
+    if (*Handle)
+    {
+        ZwClose(*Handle);
+    }
+    *Handle = NULL;
+    *Event = NULL;
+}
 
 #pragma code_seg()
 STDMETHODIMP_(VOID)
-CAdapterCommon::NotifyMicEngaged
+CAdapterCommon::NotifyStreamEngaged
 (
     _In_  BOOLEAN IsCapture
 )
 /*++
 Routine Description:
-    Called when a capture stream starts (enters KSSTATE_RUN).
-    Signals the named event so user-mode apps know the mic is in use.
-    Thread-safe via interlocked operations.
+    Called when a wave stream enters KSSTATE_RUN from a non-RUN state.
+    Increments the per-direction counter and signals the matching named
+    event(s) whenever the counter is >= 1. There is intentionally no startup
+    suppression window: the count and the event always agree.
 
-    NOTE: We ignore mic engagement signaling during the first 5 seconds after driver init
-    to avoid false positives from Windows audio service device enumeration.
-    The count is still tracked, but the event is not signaled during startup.
+    The caller (CMiniportWaveRTStream::SetEngaged) guarantees that each stream
+    contributes at most one increment until it is disengaged.
 Arguments:
-    IsCapture - TRUE if this is a capture stream (microphone)
+    IsCapture - TRUE for a capture (mic) stream, FALSE for a render (speaker) stream
 --*/
 {
-    if (!IsCapture)
+    if (IsCapture)
     {
-        return;  // Only track capture streams
-    }
-
-    LONG newCount = InterlockedIncrement(&m_lMicEngagedCount);
-
-    // Check if startup period has passed (5 seconds)
-    // This prevents false engagement signals from Windows audio enumeration at boot
-    if (!m_bStartupComplete)
-    {
-        LARGE_INTEGER currentTime;
-        currentTime = KeQueryPerformanceCounter(NULL);
-
-        // Calculate elapsed time in seconds using performance counter frequency
-        // elapsedTicks / frequency = elapsed seconds
-        LONGLONG elapsedTicks = currentTime.QuadPart - m_liInitTimestamp.QuadPart;
-        LONGLONG elapsedSeconds = elapsedTicks / m_liPerfFrequency.QuadPart;
-
-        if (elapsedSeconds < 5)  // Less than 5 seconds
+        LONG newCount = InterlockedIncrement(&m_lMicEngagedCount);
+        if (newCount >= 1)
         {
-            DPF(D_TERSE, ("ISL Mic Engaged IGNORED - still in startup period (%lld sec elapsed, count=%ld)", elapsedSeconds, newCount));
-            return;  // Don't signal during startup period, but count is tracked
+            if (m_pMicEngagedEvent)  KeSetEvent(m_pMicEngagedEvent,  IO_NO_INCREMENT, FALSE);
+            if (m_pMicEngagedEvent2) KeSetEvent(m_pMicEngagedEvent2, IO_NO_INCREMENT, FALSE);
         }
-
-        // Startup period complete
-        m_bStartupComplete = TRUE;
-        DPF(D_TERSE, ("ISL Mic startup period complete - now tracking engagement"));
+        DPF(D_TERSE, ("CallJoyna Mic engaged (count=%ld)", newCount));
     }
-
-    // Signal the event when first capture stream starts (or if already engaged after startup)
-    if (newCount >= 1 && m_pMicEngagedEvent)
+    else
     {
-        KeSetEvent(m_pMicEngagedEvent, IO_NO_INCREMENT, FALSE);
-        DPF(D_TERSE, ("ISL Mic Engaged - signaling user-mode (count=%ld)", newCount));
+        LONG newCount = InterlockedIncrement(&m_lSpeakerEngagedCount);
+        if (newCount >= 1 && m_pSpeakerEngagedEvent)
+        {
+            KeSetEvent(m_pSpeakerEngagedEvent, IO_NO_INCREMENT, FALSE);
+        }
+        DPF(D_TERSE, ("CallJoyna Speaker engaged (count=%ld)", newCount));
     }
 }
 
 #pragma code_seg()
 STDMETHODIMP_(VOID)
-CAdapterCommon::NotifyMicDisengaged
+CAdapterCommon::NotifyStreamDisengaged
 (
     _In_  BOOLEAN IsCapture
 )
 /*++
 Routine Description:
-    Called when a capture stream stops (enters KSSTATE_STOP).
-    Clears the named event when all capture streams have stopped.
-    Thread-safe via interlocked operations.
+    Called when a wave stream leaves KSSTATE_RUN (PAUSE, STOP, ACQUIRE or
+    destruction). Decrements the per-direction counter and clears the
+    matching named event(s) when it reaches 0.
 Arguments:
-    IsCapture - TRUE if this is a capture stream (microphone)
+    IsCapture - TRUE for a capture (mic) stream, FALSE for a render (speaker) stream
 --*/
 {
-    if (!IsCapture)
-    {
-        return;  // Only track capture streams
-    }
+    PLONG   pCount = IsCapture ? &m_lMicEngagedCount : &m_lSpeakerEngagedCount;
+    LONG    newCount = InterlockedDecrement(pCount);
 
-    LONG newCount = InterlockedDecrement(&m_lMicEngagedCount);
-
-    // Prevent underflow
+    // Prevent underflow (should not happen with per-stream guarding, but be safe)
     if (newCount < 0)
     {
-        InterlockedExchange(&m_lMicEngagedCount, 0);
+        InterlockedExchange(pCount, 0);
         newCount = 0;
     }
 
-    // Clear the event when last capture stream stops
-    if (newCount == 0 && m_pMicEngagedEvent)
+    if (newCount == 0)
     {
-        KeClearEvent(m_pMicEngagedEvent);
-        DPF(D_TERSE, ("ISL Mic Disengaged - clearing signal"));
+        if (IsCapture)
+        {
+            if (m_pMicEngagedEvent)  KeClearEvent(m_pMicEngagedEvent);
+            if (m_pMicEngagedEvent2) KeClearEvent(m_pMicEngagedEvent2);
+        }
+        else if (m_pSpeakerEngagedEvent)
+        {
+            KeClearEvent(m_pSpeakerEngagedEvent);
+        }
     }
+
+    DPF(D_TERSE, ("CallJoyna %s disengaged (count=%ld)", IsCapture ? "Mic" : "Speaker", newCount));
+}
+
+//=============================================================================
+// Telemetry
+//=============================================================================
+
+#pragma code_seg()
+STDMETHODIMP_(VOID)
+CAdapterCommon::GetTelemetry
+(
+    _Out_ PCALLJOYNA_TELEMETRY Telemetry
+)
+/*++
+Routine Description:
+    Fills a CALLJOYNA_TELEMETRY snapshot. The loopback fields are read under
+    m_LoopbackSpinLock so they are mutually consistent; the engagement counts
+    are read with interlocked semantics. Non-paged so it may be called from
+    any context at IRQL <= DISPATCH_LEVEL (the property handler calls it at
+    PASSIVE_LEVEL).
+--*/
+{
+    KIRQL oldIrql;
+
+    RtlZeroMemory(Telemetry, sizeof(CALLJOYNA_TELEMETRY));
+    Telemetry->cbSize = sizeof(CALLJOYNA_TELEMETRY);
+
+    // Counters are never negative (underflow is clamped in NotifyStreamDisengaged).
+    Telemetry->micEngagedCount     = (ULONG)InterlockedCompareExchange(&m_lMicEngagedCount, 0, 0);
+    Telemetry->speakerEngagedCount = (ULONG)InterlockedCompareExchange(&m_lSpeakerEngagedCount, 0, 0);
+
+    KeAcquireSpinLock(&m_LoopbackSpinLock, &oldIrql);
+    Telemetry->loopbackBytesAvailable = m_ulLoopbackDataAvailable;
+    Telemetry->loopbackWriteCount     = m_ulLoopbackWriteCount;
+    Telemetry->loopbackReadCount      = m_ulLoopbackReadCount;
+    Telemetry->loopbackOverruns       = m_ulLoopbackOverruns;
+    Telemetry->loopbackUnderruns      = m_ulLoopbackUnderruns;
+    KeReleaseSpinLock(&m_LoopbackSpinLock, oldIrql);
 }

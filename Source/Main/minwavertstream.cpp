@@ -38,13 +38,16 @@ Return Value:
     PAGED_CODE();
     if (NULL != m_pMiniport)
     {
-    
+        // Release this stream's engaged-count contribution exactly once, even if
+        // the stream is torn down without ever seeing KSSTATE_STOP.
+        SetEngaged(FALSE);
+
         if (m_bUnregisterStream)
         {
             m_pMiniport->StreamClosed(m_ulPin, this);
             m_bUnregisterStream = FALSE;
         }
-        
+
         m_pMiniport->Release();
         m_pMiniport = NULL;
     }
@@ -205,6 +208,7 @@ Return Value:
     m_pDmaBuffer = NULL;
     m_ulNotificationsPerBuffer = 0;
     m_KsState = KSSTATE_STOP;
+    m_bCountedAsEngaged = FALSE;
     m_pTimer = NULL;
     m_pDpc = NULL;
     m_llPacketCounter = 0;
@@ -1243,16 +1247,10 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 KeFlushQueuedDpcs();
             }
 
-            // Notify user-mode that microphone is disengaged (for capture streams)
-            // Do this BEFORE state change to ensure proper cleanup ordering
-            if (m_bCapture)
-            {
-                PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
-                if (pAdapterComm)
-                {
-                    pAdapterComm->NotifyMicDisengaged(TRUE);
-                }
-            }
+            // Release this stream's engaged-count contribution (mic or speaker).
+            // Do this BEFORE state change to ensure proper cleanup ordering.
+            // SetEngaged is idempotent, so a STOP after PAUSE is a no-op here.
+            SetEngaged(FALSE);
 
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
 
@@ -1287,6 +1285,9 @@ NTSTATUS CMiniportWaveRTStream::SetState
             {
                 // Acquire stream resources
             }
+            // A direct RUN -> ACQUIRE is not expected from portcls, but if it
+            // happens the stream is no longer running: drop its contribution.
+            SetEngaged(FALSE);
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
             m_KsState = State_;
             KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
@@ -1306,6 +1307,10 @@ NTSTATUS CMiniportWaveRTStream::SetState
                     ExCancelTimer(m_pNotificationTimer, NULL);
                     KeFlushQueuedDpcs();
                 }
+
+                // RUN -> PAUSE: the stream is no longer running, so it no longer
+                // counts as engaged (PAUSE -> RUN re-adds it below).
+                SetEngaged(FALSE);
 
                 KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
 
@@ -1347,6 +1352,21 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 LARGE_INTEGER ullPerfCounterTemp;
                 ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
 
+                // Capture stream entering RUN from a non-RUN state: discard any
+                // stale audio queued in the speaker->mic ring and re-arm preroll
+                // so the new mic session starts clean. The capture timer/DPC is
+                // not running here (cancelled + flushed on PAUSE/STOP, and not
+                // yet started for this RUN), and the render side is serialised
+                // by the loopback spinlock inside ResetLoopbackBuffer.
+                if (m_bCapture && m_KsState != KSSTATE_RUN)
+                {
+                    PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
+                    if (pAdapterComm)
+                    {
+                        pAdapterComm->ResetLoopbackBuffer();
+                    }
+                }
+
                 KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
 
                 m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
@@ -1371,15 +1391,9 @@ NTSTATUS CMiniportWaveRTStream::SetState
                      );
                 }
 
-                // Notify user-mode that microphone is engaged (for capture streams)
-                if (m_bCapture)
-                {
-                    PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
-                    if (pAdapterComm)
-                    {
-                        pAdapterComm->NotifyMicEngaged(TRUE);
-                    }
-                }
+                // Notify user-mode that this stream (mic or speaker) is running.
+                // Idempotent: a RUN -> RUN request does not double count.
+                SetEngaged(TRUE);
             }
             return ntStatus;  // State already updated, return early
     }
@@ -1390,6 +1404,51 @@ NTSTATUS CMiniportWaveRTStream::SetState
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
     return ntStatus;
+}
+
+//=============================================================================
+#pragma code_seg()
+VOID CMiniportWaveRTStream::SetEngaged
+(
+    _In_    BOOLEAN Engaged
+)
+/*++
+
+Routine Description:
+
+  Adds (Engaged == TRUE) or removes (Engaged == FALSE) this stream's single
+  unit of the adapter-wide engaged count for its direction (mic when
+  m_bCapture, otherwise speaker). m_bCountedAsEngaged guarantees that each
+  stream contributes at most 1 and releases it exactly once, regardless of
+  how many RUN / PAUSE / STOP transitions or a destruction-while-running.
+
+  SetState is serialised per stream by portcls, and the destructor runs after
+  the last SetState, so no lock is needed on m_bCountedAsEngaged. Non-paged
+  because SetState is non-paged; the adapter calls are also non-paged.
+
+--*/
+{
+    if (Engaged == m_bCountedAsEngaged)
+    {
+        return;
+    }
+
+    PADAPTERCOMMON pAdapterComm = m_pMiniport ? m_pMiniport->GetAdapterCommObj() : NULL;
+    if (!pAdapterComm)
+    {
+        return;
+    }
+
+    m_bCountedAsEngaged = Engaged;
+
+    if (Engaged)
+    {
+        pAdapterComm->NotifyStreamEngaged(m_bCapture);
+    }
+    else
+    {
+        pAdapterComm->NotifyStreamDisengaged(m_bCapture);
+    }
 }
 
 //=============================================================================
